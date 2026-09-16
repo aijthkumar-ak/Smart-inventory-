@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Smart Inventory | Products</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f4f7fb;
+            color: #1e293b;
+            min-height: 100vh;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 245px;
+            height: 100vh;
+            background: linear-gradient(180deg, #111827, #172554);
+            padding: 25px 15px;
+            color: white;
+            z-index: 10;
+        }
+
+        .logo {
+            font-size: 23px;
+            font-weight: bold;
+            padding: 10px;
+            margin-bottom: 35px;
+        }
+
+        .logo span {
+            color: #38bdf8;
+        }
+
+        .nav-btn {
+            width: 100%;
+            border: none;
+            background: transparent;
+            color: #cbd5e1;
+            padding: 15px;
+            margin-bottom: 7px;
+            border-radius: 10px;
+            text-align: left;
+            cursor: pointer;
+            font-size: 15px;
+            transition: 0.3s;
+        }
+
+        .nav-btn:hover {
+            background: #2563eb;
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .nav-btn.active {
+            background: #2563eb;
+            color: white;
+        }
+
+        /* MAIN */
+        .main {
+            margin-left: 245px;
+            padding: 30px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            animation: fadeDown 0.6s ease;
+        }
+
+        .topbar h1 {
+            font-size: 30px;
+        }
+
+        .subtitle {
+            color: #64748b;
+            margin-top: 6px;
+        }
+
+        .user {
+            background: white;
+            padding: 11px 18px;
+            border-radius: 30px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.07);
+            font-weight: bold;
+        }
+
+        /* TOOLBAR */
+        .toolbar {
+            background: white;
+            padding: 18px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.06);
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 20px;
+            animation: slideUp 0.6s ease;
+        }
+
+        .search-box {
+            flex: 1;
+            max-width: 450px;
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 13px 16px;
+            border: 1px solid #dbe2ea;
+            border-radius: 10px;
+            outline: none;
+            font-size: 14px;
+        }
+
+        .search-box input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        }
+
+        .add-btn {
+            border: none;
+            background: #2563eb;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 9px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        .add-btn:hover {
+            background: #1d4ed8;
+            transform: scale(1.03);
+        }
+
+        /* PRODUCT CARD */
+        .product-container {
+            background: white;
+            border-radius: 17px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.06);
+            overflow: hidden;
+            animation: fadeIn 0.8s ease;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 850px;
+        }
+
+        th {
+            background: #f8fafc;
+            color: #64748b;
+            font-size: 13px;
+            text-align: left;
+            padding: 16px;
+        }
+
+        td {
+            padding: 16px;
+            border-top: 1px solid #edf0f4;
+            font-size: 14px;
+        }
+
+        tr {
+            transition: 0.25s;
+        }
+
+        tbody tr:hover {
+            background: #f8fbff;
+        }
+
+        .product-name {
+            font-weight: bold;
+            color: #1e293b;
+        }
+
+        .sku {
+            color: #64748b;
+        }
+
+        .category {
+            display: inline-block;
+            background: #dbeafe;
+            color: #1d4ed8;
+            padding: 5px 9px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .quantity {
+            font-weight: bold;
+        }
+
+        .low {
+            color: #dc2626;
+        }
+
+        .normal {
+            color: #16a34a;
+        }
+
+        .price {
+            font-weight: bold;
+        }
+
+        .delete-btn {
+            border: none;
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 8px 12px;
+            border-radius: 7px;
+            cursor: pointer;
+            transition: 0.25s;
+        }
+
+        .delete-btn:hover {
+            background: #fecaca;
+            transform: scale(1.05);
+        }
+
+        .empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #94a3b8;
+        }
+
+        .empty-icon {
+            font-size: 50px;
+            margin-bottom: 15px;
+        }
+
+        /* SUMMARY */
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 18px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.05);
+            animation: slideUp 0.7s ease;
+        }
+
+        .summary-card p {
+            color: #64748b;
+            font-size: 13px;
+            margin-bottom: 7px;
+        }
+
+        .summary-card h2 {
+            color: #2563eb;
+        }
+
+        /* ANIMATIONS */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(25px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* MOBILE */
+        @media(max-width: 900px) {
+
+            .sidebar {
+                width: 200px;
+            }
+
+            .main {
+                margin-left: 200px;
+            }
+
+            .summary {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media(max-width: 650px) {
+
+            .sidebar {
+                position: relative;
+                width: 100%;
+                height: auto;
+            }
+
+            .main {
+                margin-left: 0;
+                padding: 18px;
+            }
+
+            .topbar {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+
+            .toolbar {
+                flex-direction: column;
+            }
+
+            .search-box {
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+        <div class="logo">
+            Smart<span>Inventory</span>
+        </div>
+
+        <button class="nav-btn" onclick="goDashboard()">
+            📊 &nbsp; Dashboard
+        </button>
+
+        <button class="nav-btn active">
+            📦 &nbsp; Products
+        </button>
+
+        <button class="nav-btn" onclick="goAddProduct()">
+            ➕ &nbsp; Add Product
+        </button>
+
+        <button class="nav-btn" onclick="reportMessage()">
+            📈 &nbsp; Reports
+        </button>
+
+        <button class="nav-btn" onclick="settingsMessage()">
+            ⚙️ &nbsp; Settings
+        </button>
+
+        <button class="nav-btn" onclick="logout()">
+            🚪 &nbsp; Logout
+        </button>
+
+    </aside>
+
+
+    <!-- MAIN -->
+    <main class="main">
+
+        <!-- TOPBAR -->
+        <div class="topbar">
+
+            <div>
+                <h1>📦 Products</h1>
+
+                <p class="subtitle">
+                    Manage all your inventory products
+                </p>
+            </div>
+
+            <div class="user">
+                👤 Admin
+            </div>
+
+        </div>
+
+
+        <!-- SUMMARY -->
+        <div class="summary">
+
+            <div class="summary-card">
+
+                <p>Total Products</p>
+
+                <h2 id="totalProducts">
+                    0
+                </h2>
+
+            </div>
+
+
+            <div class="summary-card">
+
+                <p>Total Stock</p>
+
+                <h2 id="totalStock">
+                    0
+                </h2>
+
+            </div>
+
+
+            <div class="summary-card">
+
+                <p>Inventory Value</p>
+
+                <h2 id="inventoryValue">
+                    ₹0
+                </h2>
+
+            </div>
+
+        </div>
+
+
+        <!-- TOOLBAR -->
+        <div class="toolbar">
+
+            <div class="search-box">
+
+                <input
+                    type="text"
+                    id="searchInput"
+                    placeholder="🔍 Search product, SKU or category..."
+                    oninput="searchProducts()"
+                >
+
+            </div>
+
+
+            <button
+                class="add-btn"
+                onclick="goAddProduct()"
+            >
+                + Add Product
+            </button>
+
+        </div>
+
+
+        <!-- PRODUCT TABLE -->
+        <div class="product-container">
+
+            <div class="table-wrapper">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Product</th>
+
+                            <th>SKU</th>
+
+                            <th>Category</th>
+
+                            <th>Quantity</th>
+
+                            <th>Price</th>
+
+                            <th>Supplier</th>
+
+                            <th>Action</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody id="productTable">
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </main>
+
+
+    <script>
+
+        /* =========================
+           LOAD PRODUCTS
+        ========================= */
+
+        let products =
+            JSON.parse(
+                localStorage.getItem(
+                    "smartInventoryProducts"
+                )
+            ) || [];
+
+
+        /* =========================
+           NAVIGATION
+        ========================= */
+
+        function goDashboard() {
+
+            window.location.href =
+                "index.html";
+
+        }
+
+
+        function goAddProduct() {
+
+            window.location.href =
+                "add-product.html";
+
+        }
+
+
+        function logout() {
+
+            localStorage.removeItem(
+                "loggedInUser"
+            );
+
+            window.location.href =
+                "login.html";
+
+        }
+
+
+        function reportMessage() {
+
+            alert(
+                "📈 Reports page will be added next."
+            );
+
+        }
+
+
+        function settingsMessage() {
+
+            alert(
+                "⚙️ Settings page will be added next."
+            );
+
+        }
+
+
+        /* =========================
+           DISPLAY PRODUCTS
+        ========================= */
+
+        function displayProducts(list) {
+
+            const table =
+                document.getElementById(
+                    "productTable"
+                );
+
+
+            table.innerHTML = "";
+
+
+            if (list.length === 0) {
+
+                table.innerHTML = `
+                    <tr>
+                        <td colspan="7">
+                            <div class="empty">
+
+                                <div class="empty-icon">
+                                    📦
+                                </div>
+
+                                <h3>
+                                    No Products Found
+                                </h3>
+
+                                <p style="margin-top:8px;">
+                                    Add your first product to get started.
+                                </p>
+
+                            </div>
+                        </td>
+                    </tr>
+                `;
+
+                return;
+            }
+
+
+            list.forEach(
+                function(product) {
+
+                    const row =
+                        document.createElement("tr");
+
+
+                    const quantity =
+                        Number(
+                            product.quantity || 0
+                        );
+
+
+                    const quantityClass =
+                        quantity < 10
+                            ? "low"
+                            : "normal";
+
+
+                    row.innerHTML = `
+
+                        <td>
+                            <div class="product-name">
+                                ${escapeHTML(
+                                    product.name || "-"
+                                )}
+                            </div>
+                        </td>
+
+                        <td>
+                            <span class="sku">
+                                ${escapeHTML(
+                                    product.sku || "-"
+                                )}
+                            </span>
+                        </td>
+
+                        <td>
+                            <span class="category">
+                                ${escapeHTML(
+                                    product.category || "-"
+                                )}
+                            </span>
+                        </td>
+
+                        <td>
+                            <span class="quantity ${quantityClass}">
+                                ${quantity}
+                            </span>
+                        </td>
+
+                        <td>
+                            <span class="price">
+                                ₹${Number(
+                                    product.price || 0
+                                ).toLocaleString("en-IN")}
+                            </span>
+                        </td>
+
+                        <td>
+                            ${escapeHTML(
+                                product.supplier || "-"
+                            )}
+                        </td>
+
+                        <td>
+
+                            <button
+                                class="delete-btn"
+                                onclick="deleteProduct(${product.id})"
+                            >
+                                🗑 Delete
+                            </button>
+
+                        </td>
+                    `;
+
+
+                    table.appendChild(row);
+
+                }
+            );
+
+        }
+
+
+        /* =========================
+           DELETE PRODUCT
+        ========================= */
+
+        function deleteProduct(id) {
+
+            const product =
+                products.find(
+                    function(item) {
+                        return item.id === id;
+                    }
+                );
+
+
+            if (!product) {
+                return;
+            }
+
+
+            const confirmDelete =
+                confirm(
+                    "Delete " +
+                    product.name +
+                    "?"
+                );
+
+
+            if (!confirmDelete) {
+                return;
+            }
+
+
+            products =
+                products.filter(
+                    function(item) {
+                        return item.id !== id;
+                    }
+                );
+
+
+            localStorage.setItem(
+                "smartInventoryProducts",
+                JSON.stringify(products)
+            );
+
+
+            updateSummary();
+
+            displayProducts(products);
+
+        }
+
+
+        /* =========================
+           SEARCH
+        ========================= */
+
+        function searchProducts() {
+
+            const search =
+                document
+                    .getElementById(
+                        "searchInput"
+                    )
+                    .value
+                    .toLowerCase()
+                    .trim();
+
+
+            if (search === "") {
+
+                displayProducts(products);
+
+                return;
+            }
+
+
+            const filtered =
+                products.filter(
+                    function(product) {
+
+                        return (
+
+                            String(
+                                product.name || ""
+                            )
+                            .toLowerCase()
+                            .includes(search)
+
+                            ||
+
+                            String(
+                                product.sku || ""
+                            )
+                            .toLowerCase()
+                            .includes(search)
+
+                            ||
+
+                            String(
+                                product.category || ""
+                            )
+                            .toLowerCase()
+                            .includes(search)
+
+                            ||
+
+                            String(
+                                product.supplier || ""
+                            )
+                            .toLowerCase()
+                            .includes(search)
+
+                        );
+
+                    }
+                );
+
+
+            displayProducts(filtered);
+
+        }
+
+
+        /* =========================
+           SUMMARY
+        ========================= */
+
+        function updateSummary() {
+
+            const totalProducts =
+                products.length;
+
+
+            const totalStock =
+                products.reduce(
+                    function(total, product) {
+
+                        return total +
+                            Number(
+                                product.quantity || 0
+                            );
+
+                    },
+                    0
+                );
+
+
+            const inventoryValue =
+                products.reduce(
+                    function(total, product) {
+
+                        return total +
+                            (
+                                Number(
+                                    product.quantity || 0
+                                ) *
+
+                                Number(
+                                    product.price || 0
+                                )
+                            );
+
+                    },
+                    0
+                );
+
+
+            document.getElementById(
+                "totalProducts"
+            ).textContent =
+                totalProducts;
+
+
+            document.getElementById(
+                "totalStock"
+            ).textContent =
+                totalStock;
+
+
+            document.getElementById(
+                "inventoryValue"
+            ).textContent =
+                "₹" +
+                inventoryValue.toLocaleString(
+                    "en-IN"
+                );
+
+        }
+
+
+        /* =========================
+           SECURITY
+        ========================= */
+
+        function escapeHTML(value) {
+
+            const div =
+                document.createElement("div");
+
+            div.textContent =
+                String(value);
+
+            return div.innerHTML;
+
+        }
+
+
+        /* =========================
+           INITIAL LOAD
+        ========================= */
+
+        updateSummary();
+
+        displayProducts(products);
+
+    </script>
+
+</body>
+</html>

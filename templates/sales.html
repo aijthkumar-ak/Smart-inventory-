@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales - Smart Inventory</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f4f6f9;
+        }
+
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 230px;
+            height: 100vh;
+            background: #172033;
+            padding: 25px 15px;
+            color: white;
+        }
+
+        .logo {
+            text-align: center;
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 35px;
+        }
+
+        .menu a {
+            display: block;
+            color: #ddd;
+            text-decoration: none;
+            padding: 14px;
+            margin: 7px 0;
+            border-radius: 8px;
+        }
+
+        .menu a:hover,
+        .active {
+            background: #2563eb;
+            color: white !important;
+        }
+
+        .main {
+            margin-left: 230px;
+            padding: 30px;
+        }
+
+        h1 {
+            margin-bottom: 25px;
+            color: #172033;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 14px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            margin-bottom: 25px;
+        }
+
+        .card h2 {
+            margin-bottom: 20px;
+            color: #172033;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr auto;
+            gap: 15px;
+            align-items: end;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 7px;
+            font-weight: bold;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            outline: none;
+        }
+
+        input:focus,
+        select:focus {
+            border-color: #2563eb;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #2563eb;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .total-box {
+            margin-top: 20px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #16a34a;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 14px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f1f5f9;
+            color: #172033;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 30px;
+            color: #777;
+        }
+
+        @media(max-width: 800px) {
+            .sidebar {
+                width: 180px;
+            }
+
+            .main {
+                margin-left: 180px;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="sidebar">
+
+        <div class="logo">
+            📦 Smart Inventory
+        </div>
+
+        <div class="menu">
+            <a href="/">🏠 Dashboard</a>
+            <a href="/inventory">📋 Inventory</a>
+            <a href="/products">➕ Add Product</a>
+            <a href="/sales" class="active">💰 Sales</a>
+            <a href="/logout">🚪 Logout</a>
+        </div>
+
+    </div>
+
+
+    <div class="main">
+
+        <h1>💰 Sales Management</h1>
+
+
+        <!-- NEW SALE -->
+
+        <div class="card">
+
+            <h2>➕ New Sale</h2>
+
+            <form action="/sales" method="POST">
+
+                <div class="form-row">
+
+                    <div>
+                        <label>Product</label>
+
+                        <select name="product_id" id="product" onchange="calculateTotal()" required>
+
+                            <option value="">Select Product</option>
+
+                            {% for product in products %}
+
+                            <option
+                                value="{{ product.id }}"
+                                data-price="{{ product.price }}"
+                                data-stock="{{ product.quantity }}">
+
+                                {{ product.name }} — Stock: {{ product.quantity }}
+
+                            </option>
+
+                            {% endfor %}
+
+                        </select>
+
+                    </div>
+
+
+                    <div>
+                        <label>Quantity</label>
+
+                        <input
+                            type="number"
+                            name="quantity"
+                            id="quantity"
+                            min="1"
+                            value="1"
+                            onchange="calculateTotal()"
+                            oninput="calculateTotal()"
+                            required>
+
+                    </div>
+
+
+                    <div>
+                        <label>Price</label>
+
+                        <input
+                            type="text"
+                            id="price"
+                            value="₹0"
+                            readonly>
+
+                    </div>
+
+
+                    <div>
+                        <button type="submit">
+                            Complete Sale
+                        </button>
+                    </div>
+
+                </div>
+
+
+                <div class="total-box">
+                    Total: ₹<span id="total">0.00</span>
+                </div>
+
+            </form>
+
+        </div>
+
+
+        <!-- SALES HISTORY -->
+
+        <div class="card">
+
+            <h2>📊 Sales History</h2>
+
+            {% if sales %}
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Product</th>
+                        <th>Quantity</th>
+                        <th>Total</th>
+                        <th>Date & Time</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for sale in sales %}
+
+                    <tr>
+
+                        <td>{{ sale.id }}</td>
+
+                        <td>{{ sale.product_name }}</td>
+
+                        <td>{{ sale.quantity }}</td>
+
+                        <td>₹{{ "%.2f"|format(sale.total) }}</td>
+
+                        <td>{{ sale.sale_date }}</td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+            {% else %}
+
+            <div class="empty">
+                No sales recorded yet.
+            </div>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+
+    <script>
+
+        function calculateTotal() {
+
+            const product = document.getElementById("product");
+            const quantity = document.getElementById("quantity");
+            const price = document.getElementById("price");
+            const total = document.getElementById("total");
+
+            if (!product.value) {
+
+                price.value = "₹0";
+                total.innerText = "0.00";
+
+                return;
+            }
+
+            const selected =
+                product.options[product.selectedIndex];
+
+            const productPrice =
+                parseFloat(selected.dataset.price) || 0;
+
+            const stock =
+                parseInt(selected.dataset.stock) || 0;
+
+            let qty =
+                parseInt(quantity.value) || 0;
+
+            if (qty > stock) {
+
+                qty = stock;
+                quantity.value = stock;
+
+                if (stock > 0) {
+                    alert("Available stock: " + stock);
+                }
+            }
+
+            price.value =
+                "₹" + productPrice.toFixed(2);
+
+            total.innerText =
+                (productPrice * qty).toFixed(2);
+        }
+
+    </script>
+
+</body>
+</html>
