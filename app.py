@@ -1,16 +1,24 @@
 from flask import Flask, render_template, request, redirect, session
 import sqlite3
+import os
 from datetime import datetime
 
 app = Flask(__name__)
 
-app.secret_key = "smart_inventory_secret_123"
+# Vercel Environment Variable-ல் SECRET_KEY set செய்யலாம்
+app.secret_key = os.environ.get(
+    "SECRET_KEY",
+    "smart_inventory_secret_123"
+)
 
 
 # ---------------- DATABASE ----------------
 
 def get_db():
-    conn = sqlite3.connect("inventory.db")
+    # Vercel-ல் /tmp மட்டுமே writable
+    db_path = "/tmp/inventory.db"
+
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -56,7 +64,6 @@ def create_database():
     ).fetchone()
 
     if user is None:
-
         cursor.execute(
             "INSERT INTO users (username, password) VALUES (?, ?)",
             ("admin", "admin123")
@@ -89,10 +96,8 @@ def login():
         conn.close()
 
         if user:
-
             session.clear()
             session["user"] = username
-
             return redirect("/")
 
         return render_template(
@@ -291,7 +296,3 @@ def sales():
 # ---------------- START ----------------
 
 create_database()
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
