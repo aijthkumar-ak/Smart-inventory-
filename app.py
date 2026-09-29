@@ -60,13 +60,13 @@ def create_database():
     # Default admin account
     user = cursor.execute(
         "SELECT * FROM users WHERE username=?",
-        ("admin",)
+        ("Ajith",)
     ).fetchone()
 
     if user is None:
         cursor.execute(
             "INSERT INTO users (username, password) VALUES (?, ?)",
-            ("admin", "admin123")
+            ("ajith", "ak")
         )
 
     conn.commit()
