@@ -66,7 +66,7 @@ def create_database():
     if user is None:
         cursor.execute(
             "INSERT INTO users (username, password) VALUES (?, ?)",
-            ("ajith", "ak" , "ak" , "1")
+            ("ajith", "ak")
         )
 
     conn.commit()
