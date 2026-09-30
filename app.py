@@ -66,7 +66,7 @@ def create_database():
     if user is None:
         cursor.execute(
             "INSERT INTO users (username, password) VALUES (?, ?)",
-            ("ajith", "ak")("ak , "ak")
+            ("ajith", "ak" , "ak" , "1")
         )
 
     conn.commit()
@@ -221,50 +221,6 @@ def products():
         return redirect("/inventory")
 
     return render_template("add product.html")
-# ---------------- user ----------------
-@app.route("/products", methods=["GET", "POST"])
-def products():
-
-    if "user" not in session:
-        return redirect("/login")
-
-    if request.method == "POST":
-
-        name = request.form.get("name")
-        category = request.form.get("category")
-        quantity = request.form.get("quantity")
-        price = request.form.get("price")
-
-        if not quantity:
-            quantity = 0
-
-        if not price:
-            price = 0
-
-        conn = get_db()
-
-        conn.execute(
-            """
-            INSERT INTO products
-            (name, category, quantity, price, created_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                name,
-                category,
-                int(quantity),
-                float(price),
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            )
-        )
-
-        conn.commit()
-        conn.close()
-
-        return redirect("/inventory")
-
-    return render_template("add product.html")
-
 
 # ---------------- SALES ----------------
 
