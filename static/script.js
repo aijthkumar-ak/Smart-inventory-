@@ -3,7 +3,7 @@
 // ======================================
 
 let products = JSON.parse(
-    localStorage.getItem("smartInventoryProducts")
+    localStorage.getItem("InventoryProducts")
 ) || [];
 
 const modal = document.getElementById("productModal");
