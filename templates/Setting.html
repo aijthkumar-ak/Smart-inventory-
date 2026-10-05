@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Smart Inventory - Settings</title>
+
+    <style>
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f4f7fb;
+            color: #1f2937;
+        }
+
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 250px;
+            height: 100vh;
+            background: linear-gradient(180deg, #172554, #1e3a8a);
+            color: white;
+            padding: 25px 15px;
+        }
+
+        .logo {
+            text-align: center;
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 35px;
+        }
+
+        .menu {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .menu button {
+            border: none;
+            background: transparent;
+            color: #dbeafe;
+            padding: 14px 16px;
+            border-radius: 10px;
+            text-align: left;
+            font-size: 15px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .menu button:hover,
+        .menu button.active {
+            background: rgba(255,255,255,0.15);
+            color: white;
+            transform: translateX(4px);
+        }
+
+        .logout {
+            margin-top: 20px;
+            background: #dc2626 !important;
+            color: white !important;
+        }
+
+        .main {
+            margin-left: 250px;
+            padding: 30px;
+        }
+
+        .header {
+            margin-bottom: 25px;
+        }
+
+        .header h1 {
+            font-size: 30px;
+        }
+
+        .header p {
+            color: #6b7280;
+            margin-top: 7px;
+        }
+
+        .settings-container {
+            max-width: 950px;
+            display: grid;
+            gap: 20px;
+        }
+
+        .settings-card {
+            background: white;
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.06);
+        }
+
+        .settings-card h2 {
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 7px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 13px;
+            border: 1px solid #d1d5db;
+            border-radius: 9px;
+            outline: none;
+            font-size: 15px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: #2563eb;
+        }
+
+        .save-btn {
+            border: none;
+            background: #2563eb;
+            color: white;
+            padding: 13px 22px;
+            border-radius: 9px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .save-btn:hover {
+            background: #1d4ed8;
+        }
+
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .toggle-row:last-child {
+            border-bottom: none;
+        }
+
+        .toggle-info h3 {
+            font-size: 16px;
+        }
+
+        .toggle-info p {
+            color: #6b7280;
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        .switch {
+            position: relative;
+            width: 50px;
+            height: 27px;
+        }
+
+        .switch input {
+            display: none;
+        }
+
+        .slider {
+            position: absolute;
+            inset: 0;
+            background: #d1d5db;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .slider:before {
+            content: "";
+            position: absolute;
+            width: 21px;
+            height: 21px;
+            left: 3px;
+            top: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        input:checked + .slider {
+            background: #2563eb;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(23px);
+        }
+
+        .message {
+            margin-top: 15px;
+            color: #15803d;
+            font-weight: bold;
+            display: none;
+        }
+
+        @media(max-width: 600px) {
+
+            .sidebar {
+                position: relative;
+                width: 100%;
+                height: auto;
+            }
+
+            .main {
+                margin-left: 0;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+
+<!-- SIDEBAR -->
+
+<aside class="sidebar">
+
+    <div class="logo">
+        📦 Smart Inventory
+    </div>
+
+    <div class="menu">
+
+        <button onclick="goDashboard()">
+            🏠 Dashboard
+        </button>
+
+        <button onclick="goProducts()">
+            📦 Products
+        </button>
+
+        <button onclick="goAddProduct()">
+            ➕ Add Product
+        </button>
+
+        <button onclick="goSales()">
+            🛒 Sales
+        </button>
+
+        <button onclick="goReports()">
+            📊 Reports
+        </button>
+
+        <button class="active">
+            ⚙️ Settings
+        </button>
+
+        <button class="logout" onclick="logout()">
+            🚪 Logout
+        </button>
+
+    </div>
+
+</aside>
+
+
+<!-- MAIN CONTENT -->
+
+<main class="main">
+
+    <div class="header">
+
+        <h1>⚙️ Settings</h1>
+
+        <p>
+            Manage your Smart Inventory preferences
+        </p>
+
+    </div>
+
+
+    <div class="settings-container">
+
+
+        <!-- PROFILE -->
+
+        <div class="settings-card">
+
+            <h2>👤 Profile Settings</h2>
+
+            <div class="form-group">
+
+                <label>Username</label>
+
+                <input
+                    type="text"
+                    id="username"
+                    placeholder="Enter username"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>Email</label>
+
+                <input
+                    type="email"
+                    id="email"
+                    placeholder="Enter email"
+                >
+
+            </div>
+
+
+            <button
+                class="save-btn"
+                onclick="saveProfile()"
+            >
+                💾 Save Profile
+            </button>
+
+            <div
+                class="message"
+                id="profileMessage"
+            >
+                Profile saved successfully!
+            </div>
+
+        </div>
+
+
+        <!-- COMPANY -->
+
+        <div class="settings-card">
+
+            <h2>🏢 Company Settings</h2>
+
+            <div class="form-group">
+
+                <label>Company Name</label>
+
+                <input
+                    type="text"
+                    id="companyName"
+                    placeholder="Enter company name"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>Currency</label>
+
+                <select id="currency">
+
+                    <option value="INR">
+                        ₹ Indian Rupee (INR)
+                    </option>
+
+                    <option value="USD">
+                        $ US Dollar (USD)
+                    </option>
+
+                    <option value="EUR">
+                        € Euro (EUR)
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <button
+                class="save-btn"
+                onclick="saveCompany()"
+            >
+                💾 Save Company
+            </button>
+
+            <div
+                class="message"
+                id="companyMessage"
+            >
+                Company settings saved!
+            </div>
+
+        </div>
+
+
+        <!-- INVENTORY -->
+
+        <div class="settings-card">
+
+            <h2>📦 Inventory Settings</h2>
+
+
+            <div class="form-group">
+
+                <label>Low Stock Limit</label>
+
+                <input
+                    type="number"
+                    id="stockLimit"
+                    value="10"
+                    min="1"
+                >
+
+            </div>
+
+
+            <button
+                class="save-btn"
+                onclick="saveInventory()"
+            >
+                💾 Save Inventory Settings
+            </button>
+
+            <div
+                class="message"
+                id="inventoryMessage"
+            >
+                Inventory settings saved!
+            </div>
+
+        </div>
+
+
+        <!-- NOTIFICATIONS -->
+
+        <div class="settings-card">
+
+            <h2>🔔 Notifications</h2>
+
+
+            <div class="toggle-row">
+
+                <div class="toggle-info">
+
+                    <h3>Low Stock Alert</h3>
+
+                    <p>
+                        Notify when product stock is low
+                    </p>
+
+                </div>
+
+
+                <label class="switch">
+
+                    <input
+                        type="checkbox"
+                        id="lowStockAlert"
+                        checked
+                        onchange="saveToggle('lowStockAlert')"
+                    >
+
+                    <span class="slider"></span>
+
+                </label>
+
+            </div>
+
+
+            <div class="toggle-row">
+
+                <div class="toggle-info">
+
+                    <h3>Sales Notification</h3>
+
+                    <p>
+                        Show notification when a sale is recorded
+                    </p>
+
+                </div>
+
+
+                <label class="switch">
+
+                    <input
+                        type="checkbox"
+                        id="salesNotification"
+                        onchange="saveToggle('salesNotification')"
+                    >
+
+                    <span class="slider"></span>
+
+                </label>
+
+            </div>
+
+        </div>
+
+
+        <!-- APPEARANCE -->
+
+        <div class="settings-card">
+
+            <h2>🎨 Appearance</h2>
+
+
+            <div class="form-group">
+
+                <label>Theme</label>
+
+                <select
+                    id="theme"
+                    onchange="changeTheme()"
+                >
+
+                    <option value="light">
+                        ☀️ Light
+                    </option>
+
+                    <option value="dark">
+                        🌙 Dark
+                    </option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+
+        <!-- PASSWORD -->
+
+        <div class="settings-card">
+
+            <h2>🔐 Security</h2>
+
+
+            <div class="form-group">
+
+                <label>New Password</label>
+
+                <input
+                    type="password"
+                    id="newPassword"
+                    placeholder="Enter new password"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>Confirm Password</label>
+
+                <input
+                    type="password"
+                    id="confirmPassword"
+                    placeholder="Confirm password"
+                >
+
+            </div>
+
+
+            <button
+                class="save-btn"
+                onclick="changePassword()"
+            >
+                🔒 Change Password
+            </button>
+
+        </div>
+
+
+    </div>
+
+</main>
+
+
+<script>
+
+    // NAVIGATION
+
+    function goDashboard() {
+        window.location.href = "/inventory";
+    }
+
+    function goProducts() {
+        window.location.href = "/products";
+    }
+
+    function goAddProduct() {
+        window.location.href = "/add_product";
+    }
+
+    function goSales() {
+        window.location.href = "/sales";
+    }
+
+    function goReports() {
+        window.location.href = "/reports";
+    }
+
+    function logout() {
+
+        if (confirm("Are you sure you want to logout?")) {
+            window.location.href = "/logout";
+        }
+
+    }
+
+
+    // PROFILE STORAGE
+
+    function saveProfile() {
+
+        const username =
+            document.getElementById("username").value;
+
+        const email =
+            document.getElementById("email").value;
+
+        localStorage.setItem("username", username);
+        localStorage.setItem("email", email);
+
+        showMessage("profileMessage");
+
+    }
+
+
+    // COMPANY STORAGE
+
+    function saveCompany() {
+
+        const company =
+            document.getElementById("companyName").value;
+
+        const currency =
+            document.getElementById("currency").value;
+
+        localStorage.setItem("companyName", company);
+        localStorage.setItem("currency", currency);
+
+        showMessage("companyMessage");
+
+    }
+
+
+    // INVENTORY STORAGE
+
+    function saveInventory() {
+
+        const limit =
+            document.getElementById("stockLimit").value;
+
+        localStorage.setItem("stockLimit", limit);
+
+        showMessage("inventoryMessage");
+
+    }
+
+
+    // TOGGLE STORAGE
+
+    function saveToggle(id) {
+
+        const value =
+            document.getElementById(id).checked;
+
+        localStorage.setItem(id, value);
+
+    }
+
+
+    // THEME
+
+    function changeTheme() {
+
+        const theme =
+            document.getElementById("theme").value;
+
+        localStorage.setItem("theme", theme);
+
+        if (theme === "dark") {
+
+            document.body.style.background = "#111827";
+            document.body.style.color = "#f9fafb";
+
+        } else {
+
+            document.body.style.background = "#f4f7fb";
+            document.body.style.color = "#1f2937";
+
+        }
+
+    }
+
+
+    // PASSWORD
+
+    function changePassword() {
+
+        const password =
+            document.getElementById("newPassword").value;
+
+        const confirm =
+            document.getElementById("confirmPassword").value;
+
+
+        if (password === "" || confirm === "") {
+
+            alert("Please enter both password fields.");
+            return;
+
+        }
+
+
+        if (password !== confirm) {
+
+            alert("Passwords do not match.");
+            return;
+
+        }
+
+
+        localStorage.setItem(
+            "inventoryPassword",
+            password
+        );
+
+        alert("Password changed successfully!");
+
+        document.getElementById("newPassword").value = "";
+        document.getElementById("confirmPassword").value = "";
+
+    }
+
+
+    // MESSAGE
+
+    function showMessage(id) {
+
+        const message =
+            document.getElementById(id);
+
+        message.style.display = "block";
+
+        setTimeout(() => {
+
+            message.style.display = "none";
+
+        }, 2500);
+
+    }
+
+
+    // LOAD SAVED SETTINGS
+
+    window.onload = function() {
+
+        document.getElementById("username").value =
+            localStorage.getItem("username") || "";
+
+        document.getElementById("email").value =
+            localStorage.getItem("email") || "";
+
+        document.getElementById("companyName").value =
+            localStorage.getItem("companyName") || "";
+
+        document.getElementById("currency").value =
+            localStorage.getItem("currency") || "INR";
+
+        document.getElementById("stockLimit").value =
+            localStorage.getItem("stockLimit") || "10";
+
+        document.getElementById("lowStockAlert").checked =
+            localStorage.getItem("lowStockAlert") !== "false";
+
+        document.getElementById("salesNotification").checked =
+            localStorage.getItem("salesNotification") === "true";
+
+        document.getElementById("theme").value =
+            localStorage.getItem("theme") || "light";
+
+        changeTheme();
+
+    };
+
+</script>
+
+</body>
+</html>
