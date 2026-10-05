@@ -290,7 +290,6 @@ def sales():
         products=products_list,
         sales=sales_data
     )
-
+    
 # ---------------- START ----------------
-
 create_database()
