@@ -60,7 +60,7 @@ def create_database():
     # Default admin account
     user = cursor.execute(
         "SELECT * FROM users WHERE username=?",
-        ("Ajith")
+        ("Ajith",)
     ).fetchone()
 
     if user is None:
