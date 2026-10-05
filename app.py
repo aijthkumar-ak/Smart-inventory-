@@ -8,7 +8,7 @@ app = Flask(__name__)
 # Vercel Environment Variable-ல் SECRET_KEY set செய்யலாம்
 app.secret_key = os.environ.get(
     "SECRET_KEY",
-    "smart_inventory_secret_123"
+    "inventory_secret_123"
 )
 
 
