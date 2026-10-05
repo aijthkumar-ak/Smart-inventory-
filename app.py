@@ -290,14 +290,6 @@ def sales():
         products=products_list,
         sales=sales_data
     )
-# ---------------- User  ----------------
-
-@app.route("/User")
-def logout():
-
-    session.clear()
-
-    return redirect("/login")
 
 # ---------------- START ----------------
 
