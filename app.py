@@ -60,7 +60,7 @@ def create_database():
     # Default admin account
     user = cursor.execute(
         "SELECT * FROM users WHERE username=?",
-        ("Ajith",)
+        ("Ajith")
     ).fetchone()
 
     if user is None:
@@ -290,7 +290,14 @@ def sales():
         products=products_list,
         sales=sales_data
     )
+# ---------------- User  ----------------
 
+@app.route("/User")
+def logout():
+
+    session.clear()
+
+    return redirect("/login")
 
 # ---------------- START ----------------
 
