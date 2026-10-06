@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Smart Inventory Dashboard</title>
+    <title>Inventory Dashboard</title>
 
     <style>
         * {
@@ -20,7 +20,8 @@
             display: flex;
         }
 
-        /* SIDEBAR */
+        /* ================= SIDEBAR ================= */
+
         .sidebar {
             width: 240px;
             background: #172033;
@@ -66,7 +67,32 @@
             color: white;
         }
 
-        /* MAIN */
+        /* ================= LOGOUT ================= */
+
+        .logout {
+            position: absolute;
+            bottom: 25px;
+            left: 15px;
+            right: 15px;
+        }
+
+        .logout a {
+            display: block;
+            text-decoration: none;
+            background: #dc2626;
+            color: white;
+            padding: 13px;
+            text-align: center;
+            border-radius: 10px;
+            transition: 0.3s;
+        }
+
+        .logout a:hover {
+            background: #b91c1c;
+        }
+
+        /* ================= MAIN ================= */
+
         .main {
             margin-left: 240px;
             width: calc(100% - 240px);
@@ -88,9 +114,11 @@
         .welcome {
             color: #64748b;
             font-size: 14px;
+            margin-top: 5px;
         }
 
-        /* CARDS */
+        /* ================= CARDS ================= */
+
         .cards {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -126,7 +154,8 @@
             color: #172033;
         }
 
-        /* QUICK ACTION */
+        /* ================= QUICK ACTION ================= */
+
         .section {
             margin-top: 35px;
         }
@@ -171,7 +200,8 @@
             font-size: 14px;
         }
 
-        /* MOBILE */
+        /* ================= MOBILE ================= */
+
         @media (max-width: 900px) {
 
             .sidebar {
@@ -195,19 +225,20 @@
 
         @media (max-width: 600px) {
 
+            body {
+                display: block;
+            }
+
             .sidebar {
                 width: 100%;
                 min-height: auto;
                 position: relative;
             }
 
-            body {
-                display: block;
-            }
-
             .main {
                 margin-left: 0;
                 width: 100%;
+                padding: 20px;
             }
 
             .cards {
@@ -219,112 +250,216 @@
 
 <body>
 
-    <!-- SIDEBAR -->
+    <!-- ================= SIDEBAR ================= -->
+
     <div class="sidebar">
 
         <div class="logo">
-            📦 Smart Inventory
+             Smart Inventory
         </div>
 
         <div class="menu">
 
             <a href="/" class="active">
-                🏠 Dashboard
+                 Dashboard
             </a>
 
             <a href="/inventory">
-                📋 Inventory
+                 Inventory
             </a>
 
             <a href="/products">
-                ➕ Add Product
+                 Add Product
             </a>
 
-            <!-- SALES MENU -->
             <a href="/sales">
-                💰 Sales
+                 Sales
             </a>
 
-            <a href="/logout">
-                🚪 Logout
+            <a href="/user">
+                 User
+            </a>
+
+            <a href="/settings">
+                 Settings
             </a>
 
         </div>
+
+
+        <!-- LOGOUT -->
+
+        <div class="logout">
+
+            <a href="/logout">
+                 Logout
+            </a>
+
+        </div>
+
     </div>
 
 
-    <!-- MAIN DASHBOARD -->
+    <!-- ================= MAIN DASHBOARD ================= -->
+
     <div class="main">
 
         <div class="top">
+
             <div>
-                <h1>Dashboard</h1>
+
+                <h1>
+                    Dashboard
+                </h1>
+
                 <div class="welcome">
                     Welcome to Smart Inventory Management
                 </div>
+
             </div>
+
         </div>
 
 
-        <!-- DASHBOARD CARDS -->
+        <!-- ================= DASHBOARD CARDS ================= -->
+
         <div class="cards">
 
             <div class="card">
-                <div class="card-icon">📦</div>
-                <h3>Total Products</h3>
-                <p>{{ total_products }}</p>
+
+                <div class="card-icon">
+                    🕞
+                </div>
+
+                <h3>
+                    Total Products
+                </h3>
+
+                <p>
+                    {{ total_products }}
+                </p>
+
             </div>
 
 
             <div class="card">
-                <div class="card-icon">📊</div>
-                <h3>Total Stock</h3>
-                <p>{{ total_stock }}</p>
+
+                <div class="card-icon">
+                    📊
+                </div>
+
+                <h3>
+                    Total Stock
+                </h3>
+
+                <p>
+                    {{ total_stock }}
+                </p>
+
             </div>
 
 
             <div class="card">
-                <div class="card-icon">💰</div>
-                <h3>Total Sales</h3>
-                <p>₹{{ "%.2f"|format(total_sales) }}</p>
+
+                <div class="card-icon">
+                    💰
+                </div>
+
+                <h3>
+                    Total Sales
+                </h3>
+
+                <p>
+                    ₹{{ "%.2f"|format(total_sales) }}
+                </p>
+
             </div>
 
 
             <div class="card">
-                <div class="card-icon">⚠️</div>
-                <h3>Low Stock</h3>
-                <p>{{ low_stock }}</p>
+
+                <div class="card-icon">
+                    ⚠️
+                </div>
+
+                <h3>
+                    Low Stock
+                </h3>
+
+                <p>
+                    {{ low_stock }}
+                </p>
+
             </div>
 
         </div>
 
 
-        <!-- QUICK ACTIONS -->
+        <!-- ================= QUICK ACTIONS ================= -->
+
         <div class="section">
 
-            <h2>Quick Actions</h2>
+            <h2>
+                Quick Actions
+            </h2>
 
             <div class="actions">
 
+
+                <!-- ADD PRODUCT -->
+
                 <a href="/products" class="action">
-                    <div class="icon">➕</div>
-                    <h3>Add Product</h3>
-                    <p>Add a new product to inventory</p>
+
+                    <div class="icon">
+                        ➕
+                    </div>
+
+                    <h3>
+                        Add Product
+                    </h3>
+
+                    <p>
+                        Add a new product to inventory
+                    </p>
+
                 </a>
 
+
+                <!-- INVENTORY -->
 
                 <a href="/inventory" class="action">
-                    <div class="icon">📋</div>
-                    <h3>View Inventory</h3>
-                    <p>Check available stock</p>
+
+                    <div class="icon">
+                        📋
+                    </div>
+
+                    <h3>
+                        View Inventory
+                    </h3>
+
+                    <p>
+                        Check available stock
+                    </p>
+
                 </a>
 
 
-                <!-- SALES BUTTON -->
+                <!-- SALES -->
+
                 <a href="/sales" class="action">
-                    <div class="icon">💰</div>
-                    <h3>Sales</h3>
-                    <p>Record and view product sales</p>
+
+                    <div class="icon">
+                        💰
+                    </div>
+
+                    <h3>
+                        Sales
+                    </h3>
+
+                    <p>
+                        Record and view product sales
+                    </p>
+
                 </a>
 
             </div>
@@ -335,9 +470,3 @@
 
 </body>
 </html>
-
-
-
-
-
-
