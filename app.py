@@ -5,29 +5,37 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# Vercel Environment Variable-ல் SECRET_KEY set செய்யலாம்
+# SECRET KEY
 app.secret_key = os.environ.get(
     "SECRET_KEY",
     "inventory_secret_123"
 )
 
 
-# ---------------- DATABASE ----------------
+# ==================================================
+# DATABASE
+# ==================================================
 
 def get_db():
-    # Vercel-ல் /tmp மட்டுமே writable
+
+    # Vercel-ல் /tmp writable
     db_path = "/tmp/inventory.db"
 
     conn = sqlite3.connect(db_path)
+
     conn.row_factory = sqlite3.Row
+
     return conn
 
 
 def create_database():
 
     conn = get_db()
+
     cursor = conn.cursor()
 
+
+    # USERS TABLE
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,6 +44,8 @@ def create_database():
         )
     """)
 
+
+    # PRODUCTS TABLE
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,6 +57,8 @@ def create_database():
         )
     """)
 
+
+    # SALES TABLE
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sales (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,23 +69,35 @@ def create_database():
         )
     """)
 
-    # Default admin account
+
+    # DEFAULT USER
+
     user = cursor.execute(
         "SELECT * FROM users WHERE username=?",
         ("Ajith",)
     ).fetchone()
 
+
     if user is None:
+
         cursor.execute(
-            "INSERT INTO users (username, password) VALUES (?, ?)",
-            ("ajith", "ak")
+            """
+            INSERT INTO users
+            (username, password)
+            VALUES (?, ?)
+            """,
+            ("Ajith", "ak")
         )
 
+
     conn.commit()
+
     conn.close()
 
 
-# ---------------- LOGIN ----------------
+# ==================================================
+# LOGIN
+# ==================================================
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -81,9 +105,12 @@ def login():
     if request.method == "POST":
 
         username = request.form.get("username")
+
         password = request.form.get("password")
 
+
         conn = get_db()
+
 
         user = conn.execute(
             """
@@ -93,22 +120,31 @@ def login():
             (username, password)
         ).fetchone()
 
+
         conn.close()
 
+
         if user:
+
             session.clear()
+
             session["user"] = username
+
             return redirect("/")
+
 
         return render_template(
             "login.html",
             error="Invalid username or password"
         )
 
+
     return render_template("login.html")
 
 
-# ---------------- LOGOUT ----------------
+# ==================================================
+# LOGOUT
+# ==================================================
 
 @app.route("/logout")
 def logout():
@@ -118,33 +154,47 @@ def logout():
     return redirect("/login")
 
 
-# ---------------- DASHBOARD ----------------
+# ==================================================
+# DASHBOARD
+# ==================================================
 
 @app.route("/")
 def index():
 
     if "user" not in session:
+
         return redirect("/login")
 
+
     conn = get_db()
+
 
     total_products = conn.execute(
         "SELECT COUNT(*) FROM products"
     ).fetchone()[0]
 
+
     total_stock = conn.execute(
         "SELECT COALESCE(SUM(quantity), 0) FROM products"
     ).fetchone()[0]
+
 
     total_sales = conn.execute(
         "SELECT COALESCE(SUM(total), 0) FROM sales"
     ).fetchone()[0]
 
+
     low_stock = conn.execute(
-        "SELECT COUNT(*) FROM products WHERE quantity <= 5"
+        """
+        SELECT COUNT(*)
+        FROM products
+        WHERE quantity <= 5
+        """
     ).fetchone()[0]
 
+
     conn.close()
+
 
     return render_template(
         "index.html",
@@ -155,21 +205,32 @@ def index():
     )
 
 
-# ---------------- INVENTORY ----------------
+# ==================================================
+# INVENTORY
+# ==================================================
 
 @app.route("/inventory")
 def inventory():
 
     if "user" not in session:
+
         return redirect("/login")
+
 
     conn = get_db()
 
+
     products = conn.execute(
-        "SELECT * FROM products ORDER BY id DESC"
+        """
+        SELECT *
+        FROM products
+        ORDER BY id DESC
+        """
     ).fetchall()
 
+
     conn.close()
+
 
     return render_template(
         "inventory.html",
@@ -177,33 +238,52 @@ def inventory():
     )
 
 
-# ---------------- ADD PRODUCT ----------------
+# ==================================================
+# ADD PRODUCT
+# ==================================================
 
 @app.route("/products", methods=["GET", "POST"])
 def products():
 
     if "user" not in session:
+
         return redirect("/login")
+
 
     if request.method == "POST":
 
         name = request.form.get("name")
+
         category = request.form.get("category")
+
         quantity = request.form.get("quantity")
+
         price = request.form.get("price")
 
+
         if not quantity:
+
             quantity = 0
 
+
         if not price:
+
             price = 0
 
+
         conn = get_db()
+
 
         conn.execute(
             """
             INSERT INTO products
-            (name, category, quantity, price, created_at)
+            (
+                name,
+                category,
+                quantity,
+                price,
+                created_at
+            )
             VALUES (?, ?, ?, ?, ?)
             """,
             (
@@ -211,54 +291,95 @@ def products():
                 category,
                 int(quantity),
                 float(price),
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
             )
         )
 
+
         conn.commit()
+
         conn.close()
+
 
         return redirect("/inventory")
 
-    return render_template("add product.html")
 
-# ---------------- SALES ----------------
+    return render_template(
+        "add product.html"
+    )
+
+
+# ==================================================
+# SALES
+# ==================================================
 
 @app.route("/sales", methods=["GET", "POST"])
 def sales():
 
     if "user" not in session:
+
         return redirect("/login")
+
 
     conn = get_db()
 
+
     if request.method == "POST":
 
-        product_id = request.form.get("product_id")
-        quantity = int(request.form.get("quantity"))
+        product_id = request.form.get(
+            "product_id"
+        )
+
+        quantity = int(
+            request.form.get("quantity")
+        )
+
 
         product = conn.execute(
-            "SELECT * FROM products WHERE id=?",
+            """
+            SELECT *
+            FROM products
+            WHERE id=?
+            """,
             (product_id,)
         ).fetchone()
 
-        if product and quantity > 0 and quantity <= product["quantity"]:
 
-            total = quantity * product["price"]
+        if (
+            product
+            and quantity > 0
+            and quantity <= product["quantity"]
+        ):
+
+            total = (
+                quantity
+                * product["price"]
+            )
+
 
             conn.execute(
                 """
                 INSERT INTO sales
-                (product_name, quantity, total, sale_date)
+                (
+                    product_name,
+                    quantity,
+                    total,
+                    sale_date
+                )
                 VALUES (?, ?, ?, ?)
                 """,
                 (
                     product["name"],
                     quantity,
                     total,
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    datetime.now().strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
                 )
             )
+
 
             conn.execute(
                 """
@@ -266,30 +387,103 @@ def sales():
                 SET quantity = quantity - ?
                 WHERE id=?
                 """,
-                (quantity, product_id)
+                (
+                    quantity,
+                    product_id
+                )
             )
+
 
             conn.commit()
 
+
         conn.close()
+
 
         return redirect("/sales")
 
+
     products_list = conn.execute(
-        "SELECT * FROM products ORDER BY name"
+        """
+        SELECT *
+        FROM products
+        ORDER BY name
+        """
     ).fetchall()
+
 
     sales_data = conn.execute(
-        "SELECT * FROM sales ORDER BY id DESC"
+        """
+        SELECT *
+        FROM sales
+        ORDER BY id DESC
+        """
     ).fetchall()
 
+
     conn.close()
+
 
     return render_template(
         "sales.html",
         products=products_list,
         sales=sales_data
     )
-    
-# ---------------- START ----------------
+
+
+# ==================================================
+# USER
+# ==================================================
+
+@app.route("/user")
+def user():
+
+    if "user" not in session:
+
+        return redirect("/login")
+
+
+    username = session.get("user")
+
+
+    return render_template(
+        "user.html",
+        username=username
+    )
+
+
+# ==================================================
+# SETTINGS
+# ==================================================
+
+@app.route("/settings")
+def settings():
+
+    if "user" not in session:
+
+        return redirect("/login")
+
+
+    username = session.get("user")
+
+
+    return render_template(
+        "settings.html",
+        username=username
+    )
+
+
+# ==================================================
+# START
+# ==================================================
+
 create_database()
+
+
+if __name__ == "__main__":
+
+    app.run(
+        debug=True,
+        host="0.0.0.0",
+        port=5000
+    )
