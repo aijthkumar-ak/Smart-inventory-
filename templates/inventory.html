@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Inventory - Inventory</title>
+    <title>Smart Inventory</title>
 
     <style>
         * {
@@ -19,6 +19,7 @@
             color: #1f2937;
         }
 
+        /* SIDEBAR */
         .sidebar {
             position: fixed;
             left: 0;
@@ -28,6 +29,7 @@
             background: #111827;
             padding: 25px 15px;
             color: white;
+            z-index: 1000;
         }
 
         .logo {
@@ -64,6 +66,7 @@
             color: white;
         }
 
+        /* LOGOUT */
         .logout {
             position: absolute;
             bottom: 25px;
@@ -79,18 +82,26 @@
             padding: 13px;
             text-align: center;
             border-radius: 10px;
+            transition: 0.3s;
         }
 
+        .logout a:hover {
+            background: #b91c1c;
+        }
+
+        /* MAIN */
         .main {
             margin-left: 240px;
             padding: 35px;
         }
 
-        .top {
+        /* TOP BAR */
+        .topbar {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 30px;
+            gap: 20px;
         }
 
         .title h1 {
@@ -102,6 +113,7 @@
             color: #6b7280;
         }
 
+        /* ADD PRODUCT BUTTON */
         .add-btn {
             background: #2563eb;
             color: white;
@@ -109,8 +121,17 @@
             padding: 13px 20px;
             border-radius: 10px;
             font-weight: bold;
+            white-space: nowrap;
+            display: inline-block;
+            transition: 0.3s;
         }
 
+        .add-btn:hover {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+        }
+
+        /* SEARCH */
         .search-box {
             background: white;
             padding: 20px;
@@ -128,6 +149,11 @@
             font-size: 15px;
         }
 
+        .search-box input:focus {
+            border-color: #2563eb;
+        }
+
+        /* TABLE */
         .table-card {
             background: white;
             border-radius: 15px;
@@ -157,6 +183,7 @@
             background: #f8fafc;
         }
 
+        /* STATUS */
         .status {
             padding: 6px 12px;
             border-radius: 20px;
@@ -185,6 +212,19 @@
             color: #94a3b8;
         }
 
+        /* ACTION BUTTONS */
+        .edit-btn {
+            color: #2563eb;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+
+        .delete-btn {
+            color: #dc2626;
+            text-decoration: none;
+        }
+
+        /* MOBILE */
         @media (max-width: 768px) {
 
             .sidebar {
@@ -197,7 +237,7 @@
             }
 
             .logo::before {
-                content: "💱";
+                content: "📦";
                 font-size: 25px;
             }
 
@@ -230,10 +270,15 @@
                 padding: 20px;
             }
 
-            .top {
+            .topbar {
                 flex-direction: column;
                 align-items: flex-start;
                 gap: 15px;
+            }
+
+            .add-btn {
+                width: 100%;
+                text-align: center;
             }
         }
     </style>
@@ -241,63 +286,68 @@
 
 <body>
 
+    <!-- SIDEBAR -->
     <aside class="sidebar">
 
         <div class="logo">
-             🕞<span>Inventory</span>
+            📦 <span>Inventory</span>
         </div>
 
         <ul class="menu">
 
             <li>
-                <a href="/" >
-                     Dashboard
+                <a href="/">
+                    🏠 Dashboard
                 </a>
             </li>
 
             <li>
                 <a href="/inventory" class="active">
-                    Inventory
+                    📦 Inventory
                 </a>
             </li>
 
             <li>
                 <a href="/products">
-                     Add Product
+                    ➕ Add Product
                 </a>
             </li>
 
             <li>
                 <a href="/sales">
-                     Sales
+                    💰 Sales
                 </a>
             </li>
 
             <li>
-                <a href="/User">
-                     User
+                <a href="/user">
+                    👤 User
                 </a>
             </li>
 
             <li>
-                <a href="Setting">
-                     Settings
+                <a href="/settings">
+                    ⚙️ Settings
                 </a>
             </li>
- 
+
+        </ul>
+
+        <!-- LOGOUT -->
         <div class="logout">
             <a href="/logout">
-                 Logout
+                🚪 Logout
             </a>
         </div>
 
     </aside>
 
 
+    <!-- MAIN CONTENT -->
     <main class="main">
 
-        <div class="Topber" 
-</div>
+        <!-- TOP BAR -->
+        <div class="topbar">
 
             <div class="title">
                 <h1>Inventory</h1>
@@ -311,6 +361,7 @@
         </div>
 
 
+        <!-- SEARCH -->
         <div class="search-box">
 
             <input
@@ -323,12 +374,12 @@
         </div>
 
 
+        <!-- TABLE -->
         <div class="table-card">
 
             <table id="inventoryTable">
 
                 <thead>
-
                     <tr>
                         <th>ID</th>
                         <th>Product</th>
@@ -337,7 +388,6 @@
                         <th>Status</th>
                         <th>Action</th>
                     </tr>
-
                 </thead>
 
                 <tbody>
@@ -348,7 +398,9 @@
 
                         <tr>
 
-                            <td>{{ product.id }}</td>
+                            <td>
+                                {{ product.id }}
+                            </td>
 
                             <td>
                                 <strong>{{ product.name }}</strong>
@@ -388,13 +440,11 @@
 
                             <td>
 
-                                <a href="#"
-                                   style="color:#2563eb;text-decoration:none;margin-right:10px;">
+                                <a href="#" class="edit-btn">
                                     Edit
                                 </a>
 
-                                <a href="#"
-                                   style="color:#dc2626;text-decoration:none;">
+                                <a href="#" class="delete-btn">
                                     Delete
                                 </a>
 
@@ -408,7 +458,7 @@
 
                         <tr>
                             <td colspan="6" class="empty">
-                                 No products found
+                                📦 No products found
                             </td>
                         </tr>
 
