@@ -447,7 +447,7 @@ def user():
 
 
     return render_template(
-        "User.html",
+        "user.html",
         username=username
     )
 
@@ -464,7 +464,7 @@ def settings():
         return redirect("/login")
 
 
-    username = session.get("user")
+    username = session.get("setting")
 
 
     return render_template(
