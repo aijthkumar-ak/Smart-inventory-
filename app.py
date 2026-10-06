@@ -468,7 +468,7 @@ def settings():
 
 
     return render_template(
-        "settings.html",
+        "setting.html",
         username=username
     )
 
