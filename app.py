@@ -435,7 +435,7 @@ def sales():
 # USER
 # ==================================================
 
-@app.route("/User")
+@app.route("/user")
 def user():
 
     if "user" not in session:
@@ -456,7 +456,7 @@ def user():
 # SETTINGS
 # ==================================================
 
-@app.route("/Settings")
+@app.route("/settings")
 def settings():
 
     if "user" not in session:
@@ -464,11 +464,11 @@ def settings():
         return redirect("/login")
 
 
-    username = session.get("User")
+    username = session.get("user")
 
 
     return render_template(
-        "Settings.html",
+        "settings.html",
         username=username
     )
 
