@@ -5,7 +5,10 @@ from datetime import datetime
 
 app = Flask(__name__)
 
+# ==================================================
 # SECRET KEY
+# ==================================================
+
 app.secret_key = os.environ.get(
     "SECRET_KEY",
     "inventory_secret_123"
@@ -13,20 +16,47 @@ app.secret_key = os.environ.get(
 
 
 # ==================================================
-# DATABASE
+# DATABASE PATH
+# ==================================================
+
+# Render Persistent Disk:
+# Set DATABASE_DIR=/data in Render Environment Variables
+#
+# Local computer:
+# project folder/database/inventory.db
+#
+# If DATABASE_DIR is not available,
+# use local database folder.
+
+DATABASE_DIR = os.environ.get(
+    "DATABASE_DIR",
+    os.path.join(os.getcwd(), "database")
+)
+
+os.makedirs(DATABASE_DIR, exist_ok=True)
+
+DB_PATH = os.path.join(
+    DATABASE_DIR,
+    "inventory.db"
+)
+
+
+# ==================================================
+# DATABASE CONNECTION
 # ==================================================
 
 def get_db():
 
-    # Vercel-ல் /tmp writable
-    db_path = "/tmp/inventory.db"
-
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(DB_PATH)
 
     conn.row_factory = sqlite3.Row
 
     return conn
 
+
+# ==================================================
+# CREATE DATABASE
+# ==================================================
 
 def create_database():
 
@@ -34,16 +64,14 @@ def create_database():
 
     cursor = conn.cursor()
 
-
     # USERS TABLE
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
         )
     """)
-
 
     # PRODUCTS TABLE
     cursor.execute("""
@@ -57,7 +85,6 @@ def create_database():
         )
     """)
 
-
     # SALES TABLE
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sales (
@@ -69,14 +96,18 @@ def create_database():
         )
     """)
 
-
+    # ==================================================
     # DEFAULT USER
+    # ==================================================
 
     user = cursor.execute(
-        "SELECT * FROM users WHERE username=?",
+        """
+        SELECT *
+        FROM users
+        WHERE username=?
+        """,
         ("Ajith",)
     ).fetchone()
-
 
     if user is None:
 
@@ -88,7 +119,6 @@ def create_database():
             """,
             ("Ajith", "ak")
         )
-
 
     conn.commit()
 
@@ -104,40 +134,45 @@ def login():
 
     if request.method == "POST":
 
-        username = request.form.get("username")
+        username = request.form.get(
+            "username",
+            ""
+        ).strip()
 
-        password = request.form.get("password")
-
+        password = request.form.get(
+            "password",
+            ""
+        )
 
         conn = get_db()
 
-
         user = conn.execute(
             """
-            SELECT * FROM users
-            WHERE username=? AND password=?
+            SELECT *
+            FROM users
+            WHERE username=?
+            AND password=?
             """,
-            (username, password)
+            (
+                username,
+                password
+            )
         ).fetchone()
 
-
         conn.close()
-
 
         if user:
 
             session.clear()
 
-            session["user"] = username
+            session["user"] = user["username"]
 
             return redirect("/")
-
 
         return render_template(
             "login.html",
             error="Invalid username or password"
         )
-
 
     return render_template("login.html")
 
@@ -165,24 +200,28 @@ def index():
 
         return redirect("/login")
 
-
     conn = get_db()
 
-
     total_products = conn.execute(
-        "SELECT COUNT(*) FROM products"
+        """
+        SELECT COUNT(*)
+        FROM products
+        """
     ).fetchone()[0]
-
 
     total_stock = conn.execute(
-        "SELECT COALESCE(SUM(quantity), 0) FROM products"
+        """
+        SELECT COALESCE(SUM(quantity), 0)
+        FROM products
+        """
     ).fetchone()[0]
-
 
     total_sales = conn.execute(
-        "SELECT COALESCE(SUM(total), 0) FROM sales"
+        """
+        SELECT COALESCE(SUM(total), 0)
+        FROM sales
+        """
     ).fetchone()[0]
-
 
     low_stock = conn.execute(
         """
@@ -192,9 +231,7 @@ def index():
         """
     ).fetchone()[0]
 
-
     conn.close()
-
 
     return render_template(
         "index.html",
@@ -216,9 +253,7 @@ def inventory():
 
         return redirect("/login")
 
-
     conn = get_db()
-
 
     products = conn.execute(
         """
@@ -228,9 +263,7 @@ def inventory():
         """
     ).fetchall()
 
-
     conn.close()
-
 
     return render_template(
         "inventory.html",
@@ -249,30 +282,65 @@ def products():
 
         return redirect("/login")
 
-
     if request.method == "POST":
 
-        name = request.form.get("name")
+        name = request.form.get(
+            "name",
+            ""
+        ).strip()
 
-        category = request.form.get("category")
+        category = request.form.get(
+            "category",
+            ""
+        ).strip()
 
-        quantity = request.form.get("quantity")
+        quantity_text = request.form.get(
+            "quantity",
+            "0"
+        )
 
-        price = request.form.get("price")
+        price_text = request.form.get(
+            "price",
+            "0"
+        )
 
+        # ------------------------------
+        # VALIDATION
+        # ------------------------------
 
-        if not quantity:
+        if not name:
+
+            return render_template(
+                "add product.html",
+                error="Product name is required"
+            )
+
+        try:
+
+            quantity = int(
+                quantity_text
+            )
+
+            price = float(
+                price_text
+            )
+
+        except ValueError:
+
+            return render_template(
+                "add product.html",
+                error="Please enter valid quantity and price"
+            )
+
+        if quantity < 0:
 
             quantity = 0
 
-
-        if not price:
+        if price < 0:
 
             price = 0
 
-
         conn = get_db()
-
 
         conn.execute(
             """
@@ -289,22 +357,19 @@ def products():
             (
                 name,
                 category,
-                int(quantity),
-                float(price),
+                quantity,
+                price,
                 datetime.now().strftime(
                     "%Y-%m-%d %H:%M:%S"
                 )
             )
         )
 
-
         conn.commit()
 
         conn.close()
 
-
         return redirect("/inventory")
-
 
     return render_template(
         "add product.html"
@@ -322,20 +387,33 @@ def sales():
 
         return redirect("/login")
 
-
     conn = get_db()
 
+    # ==================================================
+    # ADD SALE
+    # ==================================================
 
     if request.method == "POST":
 
-        product_id = request.form.get(
-            "product_id"
-        )
+        try:
 
-        quantity = int(
-            request.form.get("quantity")
-        )
+            product_id = int(
+                request.form.get(
+                    "product_id"
+                )
+            )
 
+            quantity = int(
+                request.form.get(
+                    "quantity"
+                )
+            )
+
+        except (ValueError, TypeError):
+
+            conn.close()
+
+            return redirect("/sales")
 
         product = conn.execute(
             """
@@ -345,7 +423,6 @@ def sales():
             """,
             (product_id,)
         ).fetchone()
-
 
         if (
             product
@@ -357,7 +434,6 @@ def sales():
                 quantity
                 * product["price"]
             )
-
 
             conn.execute(
                 """
@@ -380,7 +456,6 @@ def sales():
                 )
             )
 
-
             conn.execute(
                 """
                 UPDATE products
@@ -393,15 +468,15 @@ def sales():
                 )
             )
 
-
             conn.commit()
-
 
         conn.close()
 
-
         return redirect("/sales")
 
+    # ==================================================
+    # GET PRODUCTS
+    # ==================================================
 
     products_list = conn.execute(
         """
@@ -411,6 +486,9 @@ def sales():
         """
     ).fetchall()
 
+    # ==================================================
+    # GET SALES
+    # ==================================================
 
     sales_data = conn.execute(
         """
@@ -420,9 +498,7 @@ def sales():
         """
     ).fetchall()
 
-
     conn.close()
-
 
     return render_template(
         "sales.html",
@@ -442,9 +518,9 @@ def user():
 
         return redirect("/login")
 
-
-    username = session.get("user")
-
+    username = session.get(
+        "user"
+    )
 
     return render_template(
         "user.html",
@@ -463,9 +539,13 @@ def settings():
 
         return redirect("/login")
 
+    # FIXED:
+    # Previously session.get("setting")
+    # was incorrect.
 
-    username = session.get("setting")
-
+    username = session.get(
+        "user"
+    )
 
     return render_template(
         "setting.html",
@@ -474,16 +554,38 @@ def settings():
 
 
 # ==================================================
-# START
+# HEALTH CHECK
+# ==================================================
+
+@app.route("/health")
+def health():
+
+    return {
+        "status": "ok",
+        "database": DB_PATH
+    }
+
+
+# ==================================================
+# CREATE DATABASE
 # ==================================================
 
 create_database()
 
+
+# ==================================================
+# START APPLICATION
+# ==================================================
 
 if __name__ == "__main__":
 
     app.run(
         debug=True,
         host="0.0.0.0",
-        port=5000
+        port=int(
+            os.environ.get(
+                "PORT",
+                5000
+            )
+        )
     )
