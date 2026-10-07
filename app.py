@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, session
-import sqlite3
+from supabase import create_client
 import os
 from datetime import datetime
 
@@ -16,113 +16,21 @@ app.secret_key = os.environ.get(
 
 
 # ==================================================
-# DATABASE PATH
+# SUPABASE CONNECTION
 # ==================================================
 
-# Render Persistent Disk:
-# Set DATABASE_DIR=/data in Render Environment Variables
-#
-# Local computer:
-# project folder/database/inventory.db
-#
-# If DATABASE_DIR is not available,
-# use local database folder.
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
-DATABASE_DIR = os.environ.get(
-    "DATABASE_DIR",
-    os.path.join(os.getcwd(), "database")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise Exception(
+        "SUPABASE_URL or SUPABASE_KEY is missing"
+    )
+
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
 )
-
-os.makedirs(DATABASE_DIR, exist_ok=True)
-
-DB_PATH = os.path.join(
-    DATABASE_DIR,
-    "inventory.db"
-)
-
-
-# ==================================================
-# DATABASE CONNECTION
-# ==================================================
-
-def get_db():
-
-    conn = sqlite3.connect(DB_PATH)
-
-    conn.row_factory = sqlite3.Row
-
-    return conn
-
-
-# ==================================================
-# CREATE DATABASE
-# ==================================================
-
-def create_database():
-
-    conn = get_db()
-
-    cursor = conn.cursor()
-
-    # USERS TABLE
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
-        )
-    """)
-
-    # PRODUCTS TABLE
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            category TEXT,
-            quantity INTEGER DEFAULT 0,
-            price REAL DEFAULT 0,
-            created_at TEXT
-        )
-    """)
-
-    # SALES TABLE
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sales (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_name TEXT,
-            quantity INTEGER,
-            total REAL,
-            sale_date TEXT
-        )
-    """)
-
-    # ==================================================
-    # DEFAULT USER
-    # ==================================================
-
-    user = cursor.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE username=?
-        """,
-        ("Ajith",)
-    ).fetchone()
-
-    if user is None:
-
-        cursor.execute(
-            """
-            INSERT INTO users
-            (username, password)
-            VALUES (?, ?)
-            """,
-            ("Ajith", "ak")
-        )
-
-    conn.commit()
-
-    conn.close()
 
 
 # ==================================================
@@ -144,28 +52,20 @@ def login():
             ""
         )
 
-        conn = get_db()
+        result = (
+            supabase
+            .table("users")
+            .select("*")
+            .eq("username", username)
+            .eq("password", password)
+            .execute()
+        )
 
-        user = conn.execute(
-            """
-            SELECT *
-            FROM users
-            WHERE username=?
-            AND password=?
-            """,
-            (
-                username,
-                password
-            )
-        ).fetchone()
-
-        conn.close()
-
-        if user:
+        if result.data:
 
             session.clear()
 
-            session["user"] = user["username"]
+            session["user"] = result.data[0]["username"]
 
             return redirect("/")
 
@@ -197,41 +97,42 @@ def logout():
 def index():
 
     if "user" not in session:
-
         return redirect("/login")
 
-    conn = get_db()
+    products_result = (
+        supabase
+        .table("products")
+        .select("*")
+        .execute()
+    )
 
-    total_products = conn.execute(
-        """
-        SELECT COUNT(*)
-        FROM products
-        """
-    ).fetchone()[0]
+    sales_result = (
+        supabase
+        .table("sales")
+        .select("*")
+        .execute()
+    )
 
-    total_stock = conn.execute(
-        """
-        SELECT COALESCE(SUM(quantity), 0)
-        FROM products
-        """
-    ).fetchone()[0]
+    products = products_result.data or []
+    sales = sales_result.data or []
 
-    total_sales = conn.execute(
-        """
-        SELECT COALESCE(SUM(total), 0)
-        FROM sales
-        """
-    ).fetchone()[0]
+    total_products = len(products)
 
-    low_stock = conn.execute(
-        """
-        SELECT COUNT(*)
-        FROM products
-        WHERE quantity <= 5
-        """
-    ).fetchone()[0]
+    total_stock = sum(
+        int(p.get("quantity") or 0)
+        for p in products
+    )
 
-    conn.close()
+    total_sales = sum(
+        float(s.get("total") or 0)
+        for s in sales
+    )
+
+    low_stock = sum(
+        1
+        for p in products
+        if int(p.get("quantity") or 0) <= 5
+    )
 
     return render_template(
         "index.html",
@@ -250,20 +151,17 @@ def index():
 def inventory():
 
     if "user" not in session:
-
         return redirect("/login")
 
-    conn = get_db()
+    result = (
+        supabase
+        .table("products")
+        .select("*")
+        .order("id", desc=True)
+        .execute()
+    )
 
-    products = conn.execute(
-        """
-        SELECT *
-        FROM products
-        ORDER BY id DESC
-        """
-    ).fetchall()
-
-    conn.close()
+    products = result.data or []
 
     return render_template(
         "inventory.html",
@@ -279,7 +177,6 @@ def inventory():
 def products():
 
     if "user" not in session:
-
         return redirect("/login")
 
     if request.method == "POST":
@@ -304,10 +201,6 @@ def products():
             "0"
         )
 
-        # ------------------------------
-        # VALIDATION
-        # ------------------------------
-
         if not name:
 
             return render_template(
@@ -317,13 +210,8 @@ def products():
 
         try:
 
-            quantity = int(
-                quantity_text
-            )
-
-            price = float(
-                price_text
-            )
+            quantity = int(quantity_text)
+            price = float(price_text)
 
         except ValueError:
 
@@ -333,41 +221,18 @@ def products():
             )
 
         if quantity < 0:
-
             quantity = 0
 
         if price < 0:
-
             price = 0
 
-        conn = get_db()
-
-        conn.execute(
-            """
-            INSERT INTO products
-            (
-                name,
-                category,
-                quantity,
-                price,
-                created_at
-            )
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                name,
-                category,
-                quantity,
-                price,
-                datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
-            )
-        )
-
-        conn.commit()
-
-        conn.close()
+        supabase.table("products").insert({
+            "name": name,
+            "category": category,
+            "quantity": quantity,
+            "price": price,
+            "created_at": datetime.now().isoformat()
+        }).execute()
 
         return redirect("/inventory")
 
@@ -384,121 +249,93 @@ def products():
 def sales():
 
     if "user" not in session:
-
         return redirect("/login")
-
-    conn = get_db()
-
-    # ==================================================
-    # ADD SALE
-    # ==================================================
 
     if request.method == "POST":
 
         try:
 
             product_id = int(
-                request.form.get(
-                    "product_id"
-                )
+                request.form.get("product_id")
             )
 
             quantity = int(
-                request.form.get(
-                    "quantity"
-                )
+                request.form.get("quantity")
             )
 
         except (ValueError, TypeError):
 
-            conn.close()
-
             return redirect("/sales")
 
-        product = conn.execute(
-            """
-            SELECT *
-            FROM products
-            WHERE id=?
-            """,
-            (product_id,)
-        ).fetchone()
+        product_result = (
+            supabase
+            .table("products")
+            .select("*")
+            .eq("id", product_id)
+            .execute()
+        )
+
+        if not product_result.data:
+            return redirect("/sales")
+
+        product = product_result.data[0]
+
+        current_quantity = int(
+            product.get("quantity") or 0
+        )
+
+        price = float(
+            product.get("price") or 0
+        )
 
         if (
-            product
-            and quantity > 0
-            and quantity <= product["quantity"]
+            quantity > 0
+            and quantity <= current_quantity
         ):
 
-            total = (
-                quantity
-                * product["price"]
-            )
+            total = quantity * price
 
-            conn.execute(
-                """
-                INSERT INTO sales
-                (
-                    product_name,
-                    quantity,
-                    total,
-                    sale_date
-                )
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    product["name"],
-                    quantity,
-                    total,
-                    datetime.now().strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-                )
-            )
+            # SAVE SALE
+            supabase.table("sales").insert({
+                "product_name": product["name"],
+                "quantity": quantity,
+                "total": total,
+                "sale_date": datetime.now().isoformat()
+            }).execute()
 
-            conn.execute(
-                """
-                UPDATE products
-                SET quantity = quantity - ?
-                WHERE id=?
-                """,
-                (
-                    quantity,
-                    product_id
-                )
-            )
-
-            conn.commit()
-
-        conn.close()
+            # UPDATE STOCK
+            supabase.table("products").update({
+                "quantity": current_quantity - quantity
+            }).eq(
+                "id",
+                product_id
+            ).execute()
 
         return redirect("/sales")
 
-    # ==================================================
     # GET PRODUCTS
-    # ==================================================
 
-    products_list = conn.execute(
-        """
-        SELECT *
-        FROM products
-        ORDER BY name
-        """
-    ).fetchall()
+    products_result = (
+        supabase
+        .table("products")
+        .select("*")
+        .order("name")
+        .execute()
+    )
 
-    # ==================================================
+    products_list = products_result.data or []
+
     # GET SALES
-    # ==================================================
 
-    sales_data = conn.execute(
-        """
-        SELECT *
-        FROM sales
-        ORDER BY id DESC
-        """
-    ).fetchall()
+    sales_result = (
+        supabase
+        .table("sales")
+        .select("*")
+        .order("id", desc=True)
+        .execute()
+    )
 
-    conn.close()
+    sales_data = sales_result.data or []
 
     return render_template(
         "sales.html",
@@ -515,12 +352,9 @@ def sales():
 def user():
 
     if "user" not in session:
-
         return redirect("/login")
 
-    username = session.get(
-        "user"
-    )
+    username = session.get("user")
 
     return render_template(
         "user.html",
@@ -536,16 +370,9 @@ def user():
 def settings():
 
     if "user" not in session:
-
         return redirect("/login")
 
-    # FIXED:
-    # Previously session.get("setting")
-    # was incorrect.
-
-    username = session.get(
-        "user"
-    )
+    username = session.get("user")
 
     return render_template(
         "setting.html",
@@ -562,15 +389,8 @@ def health():
 
     return {
         "status": "ok",
-        "database": DB_PATH
+        "database": "Supabase"
     }
-
-
-# ==================================================
-# CREATE DATABASE
-# ==================================================
-
-create_database()
 
 
 # ==================================================
