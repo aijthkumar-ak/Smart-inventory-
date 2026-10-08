@@ -19,18 +19,32 @@ app.secret_key = os.environ.get(
 # SUPABASE CONNECTION
 # ==================================================
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise Exception(
-        "SUPABASE_URL or SUPABASE_KEY is missing"
+print("====================================")
+print("SUPABASE CONNECTION CHECK")
+print("SUPABASE_URL exists:", bool(SUPABASE_URL))
+print("SUPABASE_KEY exists:", bool(SUPABASE_KEY))
+print("====================================")
+
+if not SUPABASE_URL:
+    raise Exception("SUPABASE_URL is missing in Render Environment Variables")
+
+if not SUPABASE_KEY:
+    raise Exception("SUPABASE_KEY is missing in Render Environment Variables")
+
+try:
+    supabase = create_client(
+        SUPABASE_URL,
+        SUPABASE_KEY
     )
 
-supabase = create_client(
-    SUPABASE_URL,
-    SUPABASE_KEY
-)
+    print("Supabase client created successfully")
+
+except Exception as e:
+    print("Supabase connection error:", str(e))
+    raise
 
 
 # ==================================================
@@ -52,27 +66,38 @@ def login():
             ""
         )
 
-        result = (
-            supabase
-            .table("users")
-            .select("*")
-            .eq("username", username)
-            .eq("password", password)
-            .execute()
-        )
+        try:
 
-        if result.data:
+            result = (
+                supabase
+                .table("users")
+                .select("*")
+                .eq("username", username)
+                .eq("password", password)
+                .execute()
+            )
 
-            session.clear()
+            if result.data:
 
-            session["user"] = result.data[0]["username"]
+                session.clear()
 
-            return redirect("/")
+                session["user"] = result.data[0]["username"]
 
-        return render_template(
-            "login.html",
-            error="Invalid username or password"
-        )
+                return redirect("/")
+
+            return render_template(
+                "login.html",
+                error="Invalid username or password"
+            )
+
+        except Exception as e:
+
+            print("LOGIN ERROR:", str(e))
+
+            return render_template(
+                "login.html",
+                error="Database connection error"
+            )
 
     return render_template("login.html")
 
@@ -99,48 +124,62 @@ def index():
     if "user" not in session:
         return redirect("/login")
 
-    products_result = (
-        supabase
-        .table("products")
-        .select("*")
-        .execute()
-    )
+    try:
 
-    sales_result = (
-        supabase
-        .table("sales")
-        .select("*")
-        .execute()
-    )
+        products_result = (
+            supabase
+            .table("products")
+            .select("*")
+            .execute()
+        )
 
-    products = products_result.data or []
-    sales = sales_result.data or []
+        sales_result = (
+            supabase
+            .table("sales")
+            .select("*")
+            .execute()
+        )
 
-    total_products = len(products)
+        products = products_result.data or []
+        sales = sales_result.data or []
 
-    total_stock = sum(
-        int(p.get("quantity") or 0)
-        for p in products
-    )
+        total_products = len(products)
 
-    total_sales = sum(
-        float(s.get("total") or 0)
-        for s in sales
-    )
+        total_stock = sum(
+            int(p.get("quantity") or 0)
+            for p in products
+        )
 
-    low_stock = sum(
-        1
-        for p in products
-        if int(p.get("quantity") or 0) <= 5
-    )
+        total_sales = sum(
+            float(s.get("total") or 0)
+            for s in sales
+        )
 
-    return render_template(
-        "index.html",
-        total_products=total_products,
-        total_stock=total_stock,
-        total_sales=total_sales,
-        low_stock=low_stock
-    )
+        low_stock = sum(
+            1
+            for p in products
+            if int(p.get("quantity") or 0) <= 5
+        )
+
+        return render_template(
+            "index.html",
+            total_products=total_products,
+            total_stock=total_stock,
+            total_sales=total_sales,
+            low_stock=low_stock
+        )
+
+    except Exception as e:
+
+        print("DASHBOARD ERROR:", str(e))
+
+        return render_template(
+            "index.html",
+            total_products=0,
+            total_stock=0,
+            total_sales=0,
+            low_stock=0
+        )
 
 
 # ==================================================
@@ -153,15 +192,23 @@ def inventory():
     if "user" not in session:
         return redirect("/login")
 
-    result = (
-        supabase
-        .table("products")
-        .select("*")
-        .order("id", desc=True)
-        .execute()
-    )
+    try:
 
-    products = result.data or []
+        result = (
+            supabase
+            .table("products")
+            .select("*")
+            .order("id", desc=True)
+            .execute()
+        )
+
+        products = result.data or []
+
+    except Exception as e:
+
+        print("INVENTORY ERROR:", str(e))
+
+        products = []
 
     return render_template(
         "inventory.html",
@@ -226,15 +273,26 @@ def products():
         if price < 0:
             price = 0
 
-        supabase.table("products").insert({
-            "name": name,
-            "category": category,
-            "quantity": quantity,
-            "price": price,
-            "created_at": datetime.now().isoformat()
-        }).execute()
+        try:
 
-        return redirect("/inventory")
+            supabase.table("products").insert({
+                "name": name,
+                "category": category,
+                "quantity": quantity,
+                "price": price,
+                "created_at": datetime.now().isoformat()
+            }).execute()
+
+            return redirect("/inventory")
+
+        except Exception as e:
+
+            print("ADD PRODUCT ERROR:", str(e))
+
+            return render_template(
+                "add product.html",
+                error="Unable to save product"
+            )
 
     return render_template(
         "add product.html"
@@ -267,75 +325,99 @@ def sales():
 
             return redirect("/sales")
 
-        product_result = (
-            supabase
-            .table("products")
-            .select("*")
-            .eq("id", product_id)
-            .execute()
-        )
+        try:
 
-        if not product_result.data:
-            return redirect("/sales")
+            product_result = (
+                supabase
+                .table("products")
+                .select("*")
+                .eq("id", product_id)
+                .execute()
+            )
 
-        product = product_result.data[0]
+            if not product_result.data:
+                return redirect("/sales")
 
-        current_quantity = int(
-            product.get("quantity") or 0
-        )
+            product = product_result.data[0]
 
-        price = float(
-            product.get("price") or 0
-        )
+            current_quantity = int(
+                product.get("quantity") or 0
+            )
 
-        if (
-            quantity > 0
-            and quantity <= current_quantity
-        ):
+            price = float(
+                product.get("price") or 0
+            )
 
-            total = quantity * price
+            if (
+                quantity > 0
+                and quantity <= current_quantity
+            ):
 
-            # SAVE SALE
-            supabase.table("sales").insert({
-                "product_name": product["name"],
-                "quantity": quantity,
-                "total": total,
-                "sale_date": datetime.now().isoformat()
-            }).execute()
+                total = quantity * price
 
-            # UPDATE STOCK
-            supabase.table("products").update({
-                "quantity": current_quantity - quantity
-            }).eq(
-                "id",
-                product_id
-            ).execute()
+                # SAVE SALE
+
+                supabase.table("sales").insert({
+                    "product_name": product["name"],
+                    "quantity": quantity,
+                    "total": total,
+                    "sale_date": datetime.now().isoformat()
+                }).execute()
+
+                # UPDATE STOCK
+
+                supabase.table("products").update({
+                    "quantity": current_quantity - quantity
+                }).eq(
+                    "id",
+                    product_id
+                ).execute()
+
+        except Exception as e:
+
+            print("SALES ERROR:", str(e))
 
         return redirect("/sales")
 
     # GET PRODUCTS
 
-    products_result = (
-        supabase
-        .table("products")
-        .select("*")
-        .order("name")
-        .execute()
-    )
+    try:
 
-    products_list = products_result.data or []
+        products_result = (
+            supabase
+            .table("products")
+            .select("*")
+            .order("name")
+            .execute()
+        )
+
+        products_list = products_result.data or []
+
+    except Exception as e:
+
+        print("PRODUCT LIST ERROR:", str(e))
+
+        products_list = []
 
     # GET SALES
 
-    sales_result = (
-        supabase
-        .table("sales")
-        .select("*")
-        .order("id", desc=True)
-        .execute()
-    )
+    try:
 
-    sales_data = sales_result.data or []
+        sales_result = (
+            supabase
+            .table("sales")
+            .select("*")
+            .order("id", desc=True)
+            .execute()
+        )
+
+        sales_data = sales_result.data or []
+
+    except Exception as e:
+
+        print("SALES LIST ERROR:", str(e))
+
+        sales_data = []
 
     return render_template(
         "sales.html",
@@ -389,7 +471,9 @@ def health():
 
     return {
         "status": "ok",
-        "database": "Supabase"
+        "database": "Supabase",
+        "supabase_url_loaded": bool(SUPABASE_URL),
+        "supabase_key_loaded": bool(SUPABASE_KEY)
     }
 
 
@@ -400,12 +484,12 @@ def health():
 if __name__ == "__main__":
 
     app.run(
-        debug=True,
         host="0.0.0.0",
         port=int(
             os.environ.get(
                 "PORT",
                 5000
             )
-        )
+        ),
+        debug=False
     )
