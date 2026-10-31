@@ -1,19 +1,16 @@
 from flask import Flask, render_template, request, redirect, session
 from supabase import create_client
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 from datetime import datetime
+from functools import wraps
 
 app = Flask(__name__)
 
-# ==================================================
-# SECRET KEY
-# ==================================================
+app.secret_key = os.environ.get("SECRET_KEY")
 
-app.secret_key = os.environ.get(
-    "SECRET_KEY",
-    "inventory_secret_123"
-)
-
+if not app.secret_key:
+    raise Exception("SECRET_KEY is missing in environment variables")
 
 # ==================================================
 # SUPABASE CONNECTION
@@ -22,29 +19,23 @@ app.secret_key = os.environ.get(
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-print("====================================")
-print("SUPABASE CONNECTION CHECK")
-print("SUPABASE_URL exists:", bool(SUPABASE_URL))
-print("SUPABASE_KEY exists:", bool(SUPABASE_KEY))
-print("====================================")
-
 if not SUPABASE_URL:
-    raise Exception("SUPABASE_URL is missing in Render Environment Variables")
+    raise Exception("SUPABASE_URL is missing")
 
 if not SUPABASE_KEY:
-    raise Exception("SUPABASE_KEY is missing in Render Environment Variables")
+    raise Exception("SUPABASE_KEY is missing")
 
-try:
-    supabase = create_client(
-        SUPABASE_URL,
-        SUPABASE_KEY
-    )
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    print("Supabase client created successfully")
+# ==================================================
+# ADMIN SETTINGS
+# Set these in Render Environment Variables
+# ADMIN_USERNAME
+# ADMIN_PASSWORD
+# ==================================================
 
-except Exception as e:
-    print("Supabase connection error:", str(e))
-    raise
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 
 # ==================================================
@@ -56,34 +47,52 @@ def login():
 
     if request.method == "POST":
 
-        username = request.form.get(
-            "username",
-            ""
-        ).strip()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
 
-        password = request.form.get(
-            "password",
-            ""
-        )
+        # ADMIN LOGIN
+        if (
+            ADMIN_USERNAME
+            and ADMIN_PASSWORD
+            and username == ADMIN_USERNAME
+            and password == ADMIN_PASSWORD
+        ):
+            session.clear()
+            session["user"] = username
+            session["role"] = "admin"
+            return redirect("/")
 
+        # NORMAL USER LOGIN
         try:
-
             result = (
-                supabase
-                .table("users")
+                supabase.table("users")
                 .select("*")
                 .eq("username", username)
-                .eq("password", password)
                 .execute()
             )
 
             if result.data:
+                user_data = result.data[0]
+                stored_password = user_data.get("password", "")
 
-                session.clear()
+                password_valid = False
 
-                session["user"] = result.data[0]["username"]
+                # Support hashed passwords and existing plain-text passwords
+                try:
+                    password_valid = check_password_hash(
+                        stored_password, password
+                    )
+                except (ValueError, TypeError):
+                    password_valid = False
 
-                return redirect("/")
+                if not password_valid:
+                    password_valid = stored_password == password
+
+                if password_valid:
+                    session.clear()
+                    session["user"] = user_data["username"]
+                    session["role"] = user_data.get("role", "user")
+                    return redirect("/")
 
             return render_template(
                 "login.html",
@@ -91,15 +100,33 @@ def login():
             )
 
         except Exception as e:
-
             print("LOGIN ERROR:", str(e))
-
             return render_template(
                 "login.html",
                 error="Database connection error"
             )
 
     return render_template("login.html")
+
+
+# ==================================================
+# ADMIN REQUIRED
+# ==================================================
+
+def admin_required(function):
+
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+
+        if "user" not in session:
+            return redirect("/login")
+
+        if session.get("role") != "admin":
+            return redirect("/")
+
+        return function(*args, **kwargs)
+
+    return wrapper
 
 
 # ==================================================
@@ -110,8 +137,127 @@ def login():
 def logout():
 
     session.clear()
-
     return redirect("/login")
+
+
+# ==================================================
+# ADMIN DASHBOARD
+# ==================================================
+
+@app.route("/admin")
+@admin_required
+def admin_dashboard():
+
+    try:
+        result = (
+            supabase.table("users")
+            .select("id, username, role")
+            .order("id", desc=True)
+            .execute()
+        )
+
+        users = result.data or []
+
+    except Exception as e:
+        print("ADMIN ERROR:", str(e))
+        users = []
+
+    return render_template(
+        "admin.html",
+        users=users
+    )
+
+
+# ==================================================
+# CREATE USER - ADMIN ONLY
+# ==================================================
+
+@app.route("/admin/create-user", methods=["GET", "POST"])
+@admin_required
+def create_user():
+
+    if request.method == "POST":
+
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        role = request.form.get("role", "user").strip().lower()
+
+        if not username or not password:
+            return render_template(
+                "create_user.html",
+                error="Username and password are required"
+            )
+
+        if role not in ("admin", "user"):
+            role = "user"
+
+        if len(password) < 8:
+            return render_template(
+                "create_user.html",
+                error="Password must contain at least 8 characters"
+            )
+
+        try:
+            existing = (
+                supabase.table("users")
+                .select("id")
+                .eq("username", username)
+                .execute()
+            )
+
+            if existing.data:
+                return render_template(
+                    "create_user.html",
+                    error="Username already exists"
+                )
+
+            supabase.table("users").insert({
+                "username": username,
+                "password": generate_password_hash(password),
+                "role": role
+            }).execute()
+
+            return redirect("/admin")
+
+        except Exception as e:
+            print("CREATE USER ERROR:", str(e))
+            return render_template(
+                "create_user.html",
+                error="Unable to create user. Check database columns."
+            )
+
+    return render_template("create_user.html")
+
+
+# ==================================================
+# DELETE USER - ADMIN ONLY
+# ==================================================
+
+@app.route("/admin/delete-user/<int:user_id>", methods=["POST"])
+@admin_required
+def delete_user(user_id):
+
+    try:
+        result = (
+            supabase.table("users")
+            .select("id, username, role")
+            .eq("id", user_id)
+            .execute()
+        )
+
+        if result.data:
+            target_user = result.data[0]
+
+            if target_user.get("username") != ADMIN_USERNAME:
+                if target_user.get("username") != session.get("user"):
+                    supabase.table("users").delete().eq(
+                        "id", user_id
+                    ).execute()
+
+    except Exception as e:
+        print("DELETE USER ERROR:", str(e))
+
+    return redirect("/admin")
 
 
 # ==================================================
@@ -125,17 +271,14 @@ def index():
         return redirect("/login")
 
     try:
-
         products_result = (
-            supabase
-            .table("products")
+            supabase.table("products")
             .select("*")
             .execute()
         )
 
         sales_result = (
-            supabase
-            .table("sales")
+            supabase.table("sales")
             .select("*")
             .execute()
         )
@@ -156,30 +299,24 @@ def index():
         )
 
         low_stock = sum(
-            1
-            for p in products
+            1 for p in products
             if int(p.get("quantity") or 0) <= 5
         )
 
-        return render_template(
-            "index.html",
-            total_products=total_products,
-            total_stock=total_stock,
-            total_sales=total_sales,
-            low_stock=low_stock
-        )
-
     except Exception as e:
-
         print("DASHBOARD ERROR:", str(e))
+        total_products = 0
+        total_stock = 0
+        total_sales = 0
+        low_stock = 0
 
-        return render_template(
-            "index.html",
-            total_products=0,
-            total_stock=0,
-            total_sales=0,
-            low_stock=0
-        )
+    return render_template(
+        "index.html",
+        total_products=total_products,
+        total_stock=total_stock,
+        total_sales=total_sales,
+        low_stock=low_stock
+    )
 
 
 # ==================================================
@@ -193,10 +330,8 @@ def inventory():
         return redirect("/login")
 
     try:
-
         result = (
-            supabase
-            .table("products")
+            supabase.table("products")
             .select("*")
             .order("id", desc=True)
             .execute()
@@ -205,9 +340,7 @@ def inventory():
         products = result.data or []
 
     except Exception as e:
-
         print("INVENTORY ERROR:", str(e))
-
         products = []
 
     return render_template(
@@ -228,53 +361,31 @@ def products():
 
     if request.method == "POST":
 
-        name = request.form.get(
-            "name",
-            ""
-        ).strip()
-
-        category = request.form.get(
-            "category",
-            ""
-        ).strip()
-
-        quantity_text = request.form.get(
-            "quantity",
-            "0"
-        )
-
-        price_text = request.form.get(
-            "price",
-            "0"
-        )
+        name = request.form.get("name", "").strip()
+        category = request.form.get("category", "").strip()
+        quantity_text = request.form.get("quantity", "0")
+        price_text = request.form.get("price", "0")
 
         if not name:
-
             return render_template(
                 "add product.html",
                 error="Product name is required"
             )
 
         try:
-
             quantity = int(quantity_text)
             price = float(price_text)
 
-        except ValueError:
+            if quantity < 0 or price < 0:
+                raise ValueError
 
+        except ValueError:
             return render_template(
                 "add product.html",
-                error="Please enter valid quantity and price"
+                error="Enter a valid quantity and price"
             )
 
-        if quantity < 0:
-            quantity = 0
-
-        if price < 0:
-            price = 0
-
         try:
-
             supabase.table("products").insert({
                 "name": name,
                 "category": category,
@@ -286,17 +397,13 @@ def products():
             return redirect("/inventory")
 
         except Exception as e:
-
             print("ADD PRODUCT ERROR:", str(e))
-
             return render_template(
                 "add product.html",
                 error="Unable to save product"
             )
 
-    return render_template(
-        "add product.html"
-    )
+    return render_template("add product.html")
 
 
 # ==================================================
@@ -312,24 +419,14 @@ def sales():
     if request.method == "POST":
 
         try:
+            product_id = int(request.form.get("product_id"))
+            quantity = int(request.form.get("quantity"))
 
-            product_id = int(
-                request.form.get("product_id")
-            )
-
-            quantity = int(
-                request.form.get("quantity")
-            )
-
-        except (ValueError, TypeError):
-
-            return redirect("/sales")
-
-        try:
+            if quantity <= 0:
+                return redirect("/sales")
 
             product_result = (
-                supabase
-                .table("products")
+                supabase.table("products")
                 .select("*")
                 .eq("id", product_id)
                 .execute()
@@ -339,23 +436,12 @@ def sales():
                 return redirect("/sales")
 
             product = product_result.data[0]
+            current_quantity = int(product.get("quantity") or 0)
+            price = float(product.get("price") or 0)
 
-            current_quantity = int(
-                product.get("quantity") or 0
-            )
-
-            price = float(
-                product.get("price") or 0
-            )
-
-            if (
-                quantity > 0
-                and quantity <= current_quantity
-            ):
+            if quantity <= current_quantity:
 
                 total = quantity * price
-
-                # SAVE SALE
 
                 supabase.table("sales").insert({
                     "product_name": product["name"],
@@ -364,28 +450,18 @@ def sales():
                     "sale_date": datetime.now().isoformat()
                 }).execute()
 
-                # UPDATE STOCK
-
                 supabase.table("products").update({
                     "quantity": current_quantity - quantity
-                }).eq(
-                    "id",
-                    product_id
-                ).execute()
+                }).eq("id", product_id).execute()
 
         except Exception as e:
-
             print("SALES ERROR:", str(e))
 
         return redirect("/sales")
 
-    # GET PRODUCTS
-
     try:
-
         products_result = (
-            supabase
-            .table("products")
+            supabase.table("products")
             .select("*")
             .order("name")
             .execute()
@@ -394,18 +470,12 @@ def sales():
         products_list = products_result.data or []
 
     except Exception as e:
-
         print("PRODUCT LIST ERROR:", str(e))
-
         products_list = []
 
-    # GET SALES
-
     try:
-
         sales_result = (
-            supabase
-            .table("sales")
+            supabase.table("sales")
             .select("*")
             .order("id", desc=True)
             .execute()
@@ -414,9 +484,7 @@ def sales():
         sales_data = sales_result.data or []
 
     except Exception as e:
-
         print("SALES LIST ERROR:", str(e))
-
         sales_data = []
 
     return render_template(
@@ -427,7 +495,7 @@ def sales():
 
 
 # ==================================================
-# USER
+# USER PROFILE
 # ==================================================
 
 @app.route("/user")
@@ -436,11 +504,10 @@ def user():
     if "user" not in session:
         return redirect("/login")
 
-    username = session.get("user")
-
     return render_template(
         "user.html",
-        username=username
+        username=session.get("user"),
+        role=session.get("role", "user")
     )
 
 
@@ -454,11 +521,9 @@ def settings():
     if "user" not in session:
         return redirect("/login")
 
-    username = session.get("user")
-
     return render_template(
         "setting.html",
-        username=username
+        username=session.get("user")
     )
 
 
@@ -485,11 +550,6 @@ if __name__ == "__main__":
 
     app.run(
         host="0.0.0.0",
-        port=int(
-            os.environ.get(
-                "PORT",
-                5000
-            )
-        ),
+        port=int(os.environ.get("PORT", 5000)),
         debug=False
     )
