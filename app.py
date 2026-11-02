@@ -1,45 +1,264 @@
-from flask import Flask, render_template, request, redirect, session
-from supabase import create_client
-from werkzeug.security import generate_password_hash, check_password_hash
 import os
-from datetime import datetime
+import requests
+
+from datetime import datetime, timezone
 from functools import wraps
+
+from flask import (
+    Flask, request, jsonify, session,
+    render_template, redirect, url_for, flash
+)
+
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash
+)
+
+from supabase import create_client
+
+
+# ==================================================
+# 1. FLASK CONFIGURATION
+# ==================================================
 
 app = Flask(__name__)
 
 app.secret_key = os.environ.get("SECRET_KEY")
 
 if not app.secret_key:
-    raise Exception("SECRET_KEY is missing in environment variables")
-
-# ==================================================
-# SUPABASE CONNECTION
-# ==================================================
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-if not SUPABASE_URL:
-    raise Exception("SUPABASE_URL is missing")
-
-if not SUPABASE_KEY:
-    raise Exception("SUPABASE_KEY is missing")
-
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# ==================================================
-# ADMIN SETTINGS
-# Set these in Render Environment Variables
-# ADMIN_USERNAME
-# ADMIN_PASSWORD
-# ==================================================
-
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+    raise RuntimeError("SECRET_KEY missing in Render")
 
 
 # ==================================================
-# LOGIN
+# 2. SUPABASE CONFIGURATION
+# ==================================================
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("Supabase credentials missing")
+
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
+)
+
+
+# ==================================================
+# 3. GEMINI CONFIGURATION
+# ==================================================
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+GEMINI_MODEL = os.environ.get(
+    "GEMINI_MODEL",
+    "gemini-2.5-flash"
+)
+
+
+def ask_gemini(question, history=None):
+
+    if not GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY missing")
+
+    url = (
+        "https://generativelanguage.googleapis.com/"
+        f"v1beta/models/{GEMINI_MODEL}:generateContent"
+        f"?key={GEMINI_API_KEY}"
+    )
+
+    contents = []
+
+    if history:
+
+        for item in history:
+
+            role = (
+                "model"
+                if item.get("role") == "assistant"
+                else "user"
+            )
+
+            contents.append({
+                "role": role,
+                "parts": [{
+                    "text": str(item.get("content", ""))
+                }]
+            })
+
+    contents.append({
+        "role": "user",
+        "parts": [{"text": question}]
+    })
+
+    payload = {
+        "contents": contents,
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 2048
+        }
+    }
+
+    response = requests.post(
+        url,
+        json=payload,
+        timeout=60
+    )
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Gemini API Error: {response.text}"
+        )
+
+    data = response.json()
+
+    candidates = data.get("candidates", [])
+
+    if not candidates:
+        raise RuntimeError("Gemini returned no answer")
+
+    parts = candidates[0].get(
+        "content", {}
+    ).get("parts", [])
+
+    answer = " ".join(
+        part.get("text", "")
+        for part in parts
+        if part.get("text")
+    ).strip()
+
+    if not answer:
+        raise RuntimeError("Gemini response is empty")
+
+    return answer
+
+
+# ==================================================
+# 4. LOGIN DECORATOR
+# ==================================================
+
+def login_required(function):
+
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+
+        if not session.get("user_id"):
+            return redirect(url_for("login"))
+
+        return function(*args, **kwargs)
+
+    return wrapper
+
+
+def current_user_id():
+    return str(session.get("user_id"))
+
+
+# ==================================================
+# 5. MEMORY FUNCTIONS
+# ==================================================
+
+def save_memory(role, content):
+
+    supabase.table("memories").insert({
+
+        "user_id": current_user_id(),
+
+        "role": role,
+
+        "content": content,
+
+        "created_at": datetime.now(
+            timezone.utc
+        ).isoformat()
+
+    }).execute()
+
+
+def get_chat_history(limit=20):
+
+    result = (
+        supabase.table("memories")
+        .select("*")
+        .eq("user_id", current_user_id())
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+
+    messages = result.data or []
+
+    messages.reverse()
+
+    return messages
+
+
+# ==================================================
+# 6. REGISTER
+# ==================================================
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+
+    if request.method == "POST":
+
+        username = request.form.get(
+            "username", ""
+        ).strip()
+
+        password = request.form.get(
+            "password", ""
+        )
+
+        if not username or not password:
+            flash("Enter username and password")
+            return render_template("register.html")
+
+        if len(password) < 6:
+            flash("Password must contain at least 6 characters")
+            return render_template("register.html")
+
+        try:
+
+            existing = (
+                supabase.table("users")
+                .select("id")
+                .eq("username", username)
+                .limit(1)
+                .execute()
+            )
+
+            if existing.data:
+                flash("Username already exists")
+                return render_template("register.html")
+
+            result = supabase.table("users").insert({
+
+                "username": username,
+
+                "password": generate_password_hash(password)
+
+            }).execute()
+
+            if not result.data:
+                raise RuntimeError("Registration failed")
+
+            flash("Registration successful")
+
+            return redirect(url_for("login"))
+
+        except Exception as error:
+
+            print("REGISTER ERROR:", error)
+
+            flash("Registration failed. Check database setup.")
+
+    return render_template("register.html")
+
+
+# ==================================================
+# 7. LOGIN
 # ==================================================
 
 @app.route("/login", methods=["GET", "POST"])
@@ -47,509 +266,377 @@ def login():
 
     if request.method == "POST":
 
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
+        username = request.form.get(
+            "username", ""
+        ).strip()
 
-        # ADMIN LOGIN
-        if (
-            ADMIN_USERNAME
-            and ADMIN_PASSWORD
-            and username == ADMIN_USERNAME
-            and password == ADMIN_PASSWORD
-        ):
-            session.clear()
-            session["user"] = username
-            session["role"] = "admin"
-            return redirect("/")
+        password = request.form.get(
+            "password", ""
+        )
 
-        # NORMAL USER LOGIN
         try:
+
             result = (
                 supabase.table("users")
                 .select("*")
                 .eq("username", username)
+                .limit(1)
                 .execute()
             )
 
-            if result.data:
-                user_data = result.data[0]
-                stored_password = user_data.get("password", "")
+            users = result.data or []
 
-                password_valid = False
+            if not users:
+                flash("Invalid username or password")
+                return render_template("login.html")
 
-                # Support hashed passwords and existing plain-text passwords
-                try:
-                    password_valid = check_password_hash(
-                        stored_password, password
-                    )
-                except (ValueError, TypeError):
-                    password_valid = False
+            user = users[0]
 
-                if not password_valid:
-                    password_valid = stored_password == password
+            stored_password = user.get("password", "")
 
-                if password_valid:
-                    session.clear()
-                    session["user"] = user_data["username"]
-                    session["role"] = user_data.get("role", "user")
-                    return redirect("/")
+            try:
 
-            return render_template(
-                "login.html",
-                error="Invalid username or password"
-            )
+                valid = check_password_hash(
+                    stored_password,
+                    password
+                )
 
-        except Exception as e:
-            print("LOGIN ERROR:", str(e))
-            return render_template(
-                "login.html",
-                error="Database connection error"
-            )
+            except Exception:
+
+                valid = stored_password == password
+
+            if valid or stored_password == password:
+
+                session.clear()
+
+                session["user_id"] = str(user["id"])
+
+                session["username"] = username
+
+                return redirect(url_for("dashboard"))
+
+            flash("Invalid username or password")
+
+        except Exception as error:
+
+            print("LOGIN ERROR:", error)
+
+            flash("Login failed. Check Supabase setup.")
 
     return render_template("login.html")
 
 
 # ==================================================
-# ADMIN REQUIRED
+# 8. LOGOUT
 # ==================================================
 
-def admin_required(function):
-
-    @wraps(function)
-    def wrapper(*args, **kwargs):
-
-        if "user" not in session:
-            return redirect("/login")
-
-        if session.get("role") != "admin":
-            return redirect("/")
-
-        return function(*args, **kwargs)
-
-    return wrapper
-
-
-# ==================================================
-# LOGOUT
-# ==================================================
-
-@app.route("/logout")
+@app.route("/logout", methods=["GET", "POST"])
+@login_required
 def logout():
 
     session.clear()
-    return redirect("/login")
+
+    return redirect(url_for("login"))
 
 
 # ==================================================
-# ADMIN DASHBOARD
-# ==================================================
-
-@app.route("/admin")
-@admin_required
-def admin_dashboard():
-
-    try:
-        result = (
-            supabase.table("users")
-            .select("id, username, role")
-            .order("id", desc=True)
-            .execute()
-        )
-
-        users = result.data or []
-
-    except Exception as e:
-        print("ADMIN ERROR:", str(e))
-        users = []
-
-    return render_template(
-        "admin.html",
-        users=users
-    )
-
-
-# ==================================================
-# CREATE USER - ADMIN ONLY
-# ==================================================
-
-@app.route("/admin/create-user", methods=["GET", "POST"])
-@admin_required
-def create_user():
-
-    if request.method == "POST":
-
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        role = request.form.get("role", "user").strip().lower()
-
-        if not username or not password:
-            return render_template(
-                "create_user.html",
-                error="Username and password are required"
-            )
-
-        if role not in ("admin", "user"):
-            role = "user"
-
-        if len(password) < 8:
-            return render_template(
-                "create_user.html",
-                error="Password must contain at least 8 characters"
-            )
-
-        try:
-            existing = (
-                supabase.table("users")
-                .select("id")
-                .eq("username", username)
-                .execute()
-            )
-
-            if existing.data:
-                return render_template(
-                    "create_user.html",
-                    error="Username already exists"
-                )
-
-            supabase.table("users").insert({
-                "username": username,
-                "password": generate_password_hash(password),
-                "role": role
-            }).execute()
-
-            return redirect("/admin")
-
-        except Exception as e:
-            print("CREATE USER ERROR:", str(e))
-            return render_template(
-                "create_user.html",
-                error="Unable to create user. Check database columns."
-            )
-
-    return render_template("create_user.html")
-
-
-# ==================================================
-# DELETE USER - ADMIN ONLY
-# ==================================================
-
-@app.route("/admin/delete-user/<int:user_id>", methods=["POST"])
-@admin_required
-def delete_user(user_id):
-
-    try:
-        result = (
-            supabase.table("users")
-            .select("id, username, role")
-            .eq("id", user_id)
-            .execute()
-        )
-
-        if result.data:
-            target_user = result.data[0]
-
-            if target_user.get("username") != ADMIN_USERNAME:
-                if target_user.get("username") != session.get("user"):
-                    supabase.table("users").delete().eq(
-                        "id", user_id
-                    ).execute()
-
-    except Exception as e:
-        print("DELETE USER ERROR:", str(e))
-
-    return redirect("/admin")
-
-
-# ==================================================
-# DASHBOARD
+# 9. MAIN AI DASHBOARD
 # ==================================================
 
 @app.route("/")
-def index():
-
-    if "user" not in session:
-        return redirect("/login")
-
-    try:
-        products_result = (
-            supabase.table("products")
-            .select("*")
-            .execute()
-        )
-
-        sales_result = (
-            supabase.table("sales")
-            .select("*")
-            .execute()
-        )
-
-        products = products_result.data or []
-        sales = sales_result.data or []
-
-        total_products = len(products)
-
-        total_stock = sum(
-            int(p.get("quantity") or 0)
-            for p in products
-        )
-
-        total_sales = sum(
-            float(s.get("total") or 0)
-            for s in sales
-        )
-
-        low_stock = sum(
-            1 for p in products
-            if int(p.get("quantity") or 0) <= 5
-        )
-
-    except Exception as e:
-        print("DASHBOARD ERROR:", str(e))
-        total_products = 0
-        total_stock = 0
-        total_sales = 0
-        low_stock = 0
+@login_required
+def dashboard():
 
     return render_template(
         "index.html",
-        total_products=total_products,
-        total_stock=total_stock,
-        total_sales=total_sales,
-        low_stock=low_stock
+        username=session.get("username")
     )
 
 
 # ==================================================
-# INVENTORY
+# 10. AI CHAT API
 # ==================================================
 
-@app.route("/inventory")
-def inventory():
-
-    if "user" not in session:
-        return redirect("/login")
+@app.route("/api/chat", methods=["POST"])
+@login_required
+def ai_chat():
 
     try:
+
+        data = request.get_json(silent=True) or {}
+
+        question = data.get(
+            "message", ""
+        ).strip()
+
+        if not question:
+
+            return jsonify({
+                "success": False,
+                "error": "Please enter a message"
+            }), 400
+
+        history = get_chat_history(limit=10)
+
+        answer = ask_gemini(
+            question,
+            history
+        )
+
+        save_memory("user", question)
+
+        save_memory("assistant", answer)
+
+        return jsonify({
+            "success": True,
+            "reply": answer
+        })
+
+    except Exception as error:
+
+        print("AI CHAT ERROR:", error)
+
+        return jsonify({
+            "success": False,
+            "error": str(error)
+        }), 500
+
+
+# ==================================================
+# 11. CHAT HISTORY
+# ==================================================
+
+@app.route("/api/history")
+@login_required
+def chat_history():
+
+    try:
+
+        messages = get_chat_history(limit=100)
+
+        return jsonify({
+            "success": True,
+            "messages": messages
+        })
+
+    except Exception as error:
+
+        print("HISTORY ERROR:", error)
+
+        return jsonify({
+            "success": False,
+            "error": str(error)
+        }), 500
+
+
+# ==================================================
+# 12. CLEAR CHAT HISTORY
+# ==================================================
+
+@app.route("/api/history/clear", methods=["POST"])
+@login_required
+def clear_history():
+
+    try:
+
+        supabase.table("memories").delete().eq(
+            "user_id",
+            current_user_id()
+        ).execute()
+
+        return jsonify({
+            "success": True,
+            "message": "Chat history cleared"
+        })
+
+    except Exception as error:
+
+        print("CLEAR HISTORY ERROR:", error)
+
+        return jsonify({
+            "success": False,
+            "error": str(error)
+        }), 500
+
+
+# ==================================================
+# 13. CREATE REMINDER
+# ==================================================
+
+@app.route("/api/reminders", methods=["POST"])
+@login_required
+def create_reminder():
+
+    try:
+
+        data = request.get_json(silent=True) or {}
+
+        title = data.get("title", "").strip()
+
+        remind_at = data.get("remind_at", "").strip()
+
+        if not title or not remind_at:
+
+            return jsonify({
+                "success": False,
+                "error": "Title and date/time required"
+            }), 400
+
+        supabase.table("reminders").insert({
+
+            "user_id": current_user_id(),
+
+            "title": title,
+
+            "remind_at": remind_at,
+
+            "completed": False,
+
+            "created_at": datetime.now(
+                timezone.utc
+            ).isoformat()
+
+        }).execute()
+
+        return jsonify({
+            "success": True,
+            "message": "Reminder saved successfully"
+        })
+
+    except Exception as error:
+
+        print("REMINDER ERROR:", error)
+
+        return jsonify({
+            "success": False,
+            "error": str(error)
+        }), 500
+
+
+# ==================================================
+# 14. GET REMINDERS
+# ==================================================
+
+@app.route("/api/reminders", methods=["GET"])
+@login_required
+def get_reminders():
+
+    try:
+
         result = (
-            supabase.table("products")
+            supabase.table("reminders")
             .select("*")
-            .order("id", desc=True)
+            .eq("user_id", current_user_id())
+            .order("remind_at")
             .execute()
         )
 
-        products = result.data or []
+        return jsonify({
+            "success": True,
+            "reminders": result.data or []
+        })
 
-    except Exception as e:
-        print("INVENTORY ERROR:", str(e))
-        products = []
+    except Exception as error:
 
-    return render_template(
-        "inventory.html",
-        products=products
-    )
+        print("GET REMINDERS ERROR:", error)
 
-
-# ==================================================
-# ADD PRODUCT
-# ==================================================
-
-@app.route("/products", methods=["GET", "POST"])
-def products():
-
-    if "user" not in session:
-        return redirect("/login")
-
-    if request.method == "POST":
-
-        name = request.form.get("name", "").strip()
-        category = request.form.get("category", "").strip()
-        quantity_text = request.form.get("quantity", "0")
-        price_text = request.form.get("price", "0")
-
-        if not name:
-            return render_template(
-                "add product.html",
-                error="Product name is required"
-            )
-
-        try:
-            quantity = int(quantity_text)
-            price = float(price_text)
-
-            if quantity < 0 or price < 0:
-                raise ValueError
-
-        except ValueError:
-            return render_template(
-                "add product.html",
-                error="Enter a valid quantity and price"
-            )
-
-        try:
-            supabase.table("products").insert({
-                "name": name,
-                "category": category,
-                "quantity": quantity,
-                "price": price,
-                "created_at": datetime.now().isoformat()
-            }).execute()
-
-            return redirect("/inventory")
-
-        except Exception as e:
-            print("ADD PRODUCT ERROR:", str(e))
-            return render_template(
-                "add product.html",
-                error="Unable to save product"
-            )
-
-    return render_template("add product.html")
+        return jsonify({
+            "success": False,
+            "error": str(error)
+        }), 500
 
 
 # ==================================================
-# SALES
+# 15. DELETE REMINDER
 # ==================================================
 
-@app.route("/sales", methods=["GET", "POST"])
-def sales():
-
-    if "user" not in session:
-        return redirect("/login")
-
-    if request.method == "POST":
-
-        try:
-            product_id = int(request.form.get("product_id"))
-            quantity = int(request.form.get("quantity"))
-
-            if quantity <= 0:
-                return redirect("/sales")
-
-            product_result = (
-                supabase.table("products")
-                .select("*")
-                .eq("id", product_id)
-                .execute()
-            )
-
-            if not product_result.data:
-                return redirect("/sales")
-
-            product = product_result.data[0]
-            current_quantity = int(product.get("quantity") or 0)
-            price = float(product.get("price") or 0)
-
-            if quantity <= current_quantity:
-
-                total = quantity * price
-
-                supabase.table("sales").insert({
-                    "product_name": product["name"],
-                    "quantity": quantity,
-                    "total": total,
-                    "sale_date": datetime.now().isoformat()
-                }).execute()
-
-                supabase.table("products").update({
-                    "quantity": current_quantity - quantity
-                }).eq("id", product_id).execute()
-
-        except Exception as e:
-            print("SALES ERROR:", str(e))
-
-        return redirect("/sales")
+@app.route("/api/reminders/<reminder_id>", methods=["DELETE"])
+@login_required
+def delete_reminder(reminder_id):
 
     try:
-        products_result = (
-            supabase.table("products")
-            .select("*")
-            .order("name")
-            .execute()
-        )
 
-        products_list = products_result.data or []
+        supabase.table("reminders").delete().eq(
+            "id",
+            reminder_id
+        ).eq(
+            "user_id",
+            current_user_id()
+        ).execute()
 
-    except Exception as e:
-        print("PRODUCT LIST ERROR:", str(e))
-        products_list = []
+        return jsonify({
+            "success": True,
+            "message": "Reminder deleted"
+        })
 
-    try:
-        sales_result = (
-            supabase.table("sales")
-            .select("*")
-            .order("id", desc=True)
-            .execute()
-        )
+    except Exception as error:
 
-        sales_data = sales_result.data or []
+        print("DELETE REMINDER ERROR:", error)
 
-    except Exception as e:
-        print("SALES LIST ERROR:", str(e))
-        sales_data = []
-
-    return render_template(
-        "sales.html",
-        products=products_list,
-        sales=sales_data
-    )
+        return jsonify({
+            "success": False,
+            "error": str(error)
+        }), 500
 
 
 # ==================================================
-# USER PROFILE
+# 16. USER PROFILE
 # ==================================================
 
 @app.route("/user")
+@login_required
 def user():
 
-    if "user" not in session:
-        return redirect("/login")
-
-    return render_template(
-        "user.html",
-        username=session.get("user"),
-        role=session.get("role", "user")
-    )
+    return jsonify({
+        "username": session.get("username"),
+        "user_id": current_user_id()
+    })
 
 
 # ==================================================
-# SETTINGS
+# 17. SETTINGS
 # ==================================================
 
 @app.route("/settings")
+@login_required
 def settings():
-
-    if "user" not in session:
-        return redirect("/login")
 
     return render_template(
         "setting.html",
-        username=session.get("user")
+        username=session.get("username")
     )
 
 
 # ==================================================
-# HEALTH CHECK
+# 18. HEALTH CHECK
 # ==================================================
 
 @app.route("/health")
 def health():
 
-    return {
-        "status": "ok",
-        "database": "Supabase",
-        "supabase_url_loaded": bool(SUPABASE_URL),
-        "supabase_key_loaded": bool(SUPABASE_KEY)
-    }
+    return jsonify({
+
+        "status": "healthy",
+
+        "app": "AI Digital Brain",
+
+        "gemini_configured": bool(GEMINI_API_KEY),
+
+        "supabase_configured": True
+
+    })
 
 
 # ==================================================
-# START APPLICATION
+# 19. RUN APPLICATION
 # ==================================================
 
 if __name__ == "__main__":
 
+    port = int(os.environ.get("PORT", 5000))
+
     app.run(
         host="0.0.0.0",
-        port=int(os.environ.get("PORT", 5000)),
+        port=port,
         debug=False
     )
